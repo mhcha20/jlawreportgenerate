@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import agent, jlaw
 from agent import GEN, _read, img_block
 
-FORMAT_REF_STOCK = os.environ.get('FORMAT_REF_STOCK', '')   # 個股格式範本檔名前綴（例如 2026-10-22_NVDA_）：用戶 send 範本後設定
+FORMAT_REF_STOCK = os.environ.get('FORMAT_REF_STOCK', '2026-10-30_ESTC_')   # 個股格式範本（用戶 2026-11-05 指定）：Drive 檔名前綴，攞行動卡／股票分析終極報告／核對附錄三份
 
 
 def stock_system(ref):
@@ -98,7 +98,11 @@ class StockJob(agent.Job):
         if FORMAT_REF_STOCK:
             try:
                 parts = [jlaw.report_by_name(FORMAT_REF_STOCK + k) for k in ('行動卡', '股票分析終極報告', '核對附錄')]
-                ref = ''.join(f'\n=== 格式範本（硬性跟足）：{n} ===\n{x[:40000]}' for n, x in parts if n)
+                ref = ('\n\n=== 格式範本（硬性跟足）===\n用戶要求每份個股報告嘅格式、每一格嘅寫法同篇幅都要同下面 ESTC 範本一樣（數字當然用當日嘅）：'
+                       '行動卡七格每格都有具體數字同理由；本體報告每部分（大市三問、生命週期、趨勢表、VPA 六行、形態、S/R 五行、Pullback／Breakout 各三點、'
+                       '機構、基本面八行、風險五類、交易計劃、三個強制欄位、九構面逐格理由、保留／不升級原因、與上一份逐項比較、最後四問、未決問題）都要寫到範本咁詳細；'
+                       '核對附錄寫足口徑、對照差異、更正清單、資料來源。build 有格式擋位（format_stock.py），任何一格少過範本水平都會失敗，要補返先過。'
+                       + ''.join(f'\n--- {n} ---\n{x[:40000]}' for n, x in parts if n))
                 s.log('格式範本：' + ('、'.join(n for n, _ in parts if n) or '⚠ 搵唔到 ' + FORMAT_REF_STOCK))
             except Exception as e: s.log(f'⚠ 讀唔到格式範本：{e}')
         hk = dt.datetime.now(ZoneInfo('Asia/Hong_Kong'))
