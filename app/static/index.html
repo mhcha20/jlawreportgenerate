@@ -56,8 +56,9 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
 #viewer { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; display:flex; flex-direction:column; }
 #viewer[hidden] { display:none; }
 #viewer .vbar { display:flex; gap:8px; align-items:center; padding:10px 12px; background:var(--card); border-bottom:1px solid var(--line); }
-#viewer .vbar b { flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#viewer .vbar button { padding:7px 11px; font-size:13px; }
+#viewer .vbar b { flex:1; min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#viewer .vbar button { padding:7px 11px; font-size:13px; flex:none; white-space:nowrap; }
+#viewer .vbar #vclose { width:36px; height:36px; padding:0; font-size:18px; line-height:1; border-radius:50%; }
 #viewer .vbody { flex:1; overflow:auto; padding:12px; -webkit-overflow-scrolling:touch; }
 #viewer .vbody img { display:block; width:100%; max-width:900px; margin:0 auto 10px; background:#fff; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.3); }
 #viewer .vbody .mute { color:#eee; text-align:center; }
@@ -131,7 +132,7 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
   </div>
 </main>
 <div id="viewer" hidden>
-  <div class="vbar"><b id="vtitle"></b><button class="sec" id="vdl">下載 PDF</button><button class="sec" id="vnew">新分頁開</button><button id="vclose">閂</button></div>
+  <div class="vbar"><b id="vtitle"></b><button class="sec" id="vdl">下載 PDF</button><button class="sec" id="vnew">新分頁開</button><button id="vclose" aria-label="關閉" title="關閉">✕</button></div>
   <div class="vbody" id="vbody"></div>
 </div>
 <script>
