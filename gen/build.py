@@ -31,7 +31,15 @@ s_all = json.dumps([S, T], ensure_ascii=False, default=str)
 if 'TODO' in s_all: die('work 檔仍有 TODO：' + str(re.findall(r'.{20}TODO.{10}', s_all)[:3]))
 if len(S['action']) > 40: die(f'今日動作超過 40 字（{len(S["action"])} 字）：{S["action"]}')
 if not CARD_ONLY and not (len(T['script3']) <= 950 and len(T['scriptfull']) <= 3500): die(f'朗讀稿超出字數上限（3 分鐘 {len(T["script3"])}／950；完整 {len(T["scriptfull"])}／3500）')
+# 分數同評等要對應（用戶 2026-11-05 決定：每 20 分一級＝九構面平均星數四捨五入）
+BANDS = [(90, 5, '強烈買入'), (70, 4, '值得買入'), (50, 3, '觀察'), (30, 2, '不建議'), (0, 1, '避免交易')]
+def rating_for(score): return next((st, nm) for lo, st, nm in BANDS if score >= lo)
 if STRICT:
+    st_need, nm_need = rating_for(S['score'])
+    want = '★' * st_need + ' ' + nm_need
+    if S.get('stars') != st_need or re.sub(r'\s+', ' ', str(S.get('rating', ''))).strip() != want:
+        die(f'評等同分數唔對應：分數 {S["score"]:.1f}／100 應該係「{want}」（★ <30｜★★ 30–49｜★★★ 50–69｜★★★★ 70–89｜★★★★★ ≥90），'
+            f'而家寫 rating={S.get("rating")!r}、stars={S.get("stars")}。照分數改 rating／stars；如果覺得評等先啱，就逐格覆核九構面星數（分數由星數計），唔好兩樣唔夾。')
     if not hasattr(w, 'qa'): die('work 檔要有 qa(m, S, T)：用 sqa.chk()／chk_true() 重算 spec／texts 入面寫死嘅數字（52 週高低、均線、ATR、量比、各價位距離％、R 值、升跌％、計數同日期序列）')
     w.qa(m, S, T)
     nq, nbad = sqa.qa_report()
