@@ -9,7 +9,7 @@
 
 ## 參考資料（分析時一定要用）
 - `docs/jlaw-method-notes.md`：**J Law 技術分析／交易方法筆記**，由用戶上傳嘅 51 頁 MYT 文件（`MYT_____compressed_260923_101201.pdf`，J Law「超績投資客」課程筆記）整理：基礎框架、ETF、Swing trade、VCP、拉回買入、勝率與報酬風險比、動能與趨勢、S&R、趨勢線／通道（Overshoot、假突破）、移動平均線、見頂四訊號、K 線形態、見底八訊號、套牢處理。**用戶 2026-11-05 要求呢個網站要記住呢份文件**：生成器 call Claude 嘅 system prompt 要包含呢份筆記，評分同價位要按呢套方法。
-- 原始 PDF 屬課程材料，**唔好提交入 repo**（repo 係公開嘅），只放整理筆記。
+- 原始 PDF：`docs/MYT-jlaw-notes-260923.pdf`（用戶 2026-11-05 要求放入 repo）。筆記有疑問時以原文為準。
 - `docs/jlaw-myt-stock-prompt-v2.md`：**JLaw × MYT 股票分析終極指令 V2.0**（行動卡七格、分析紀律十條、R1–R4）。
 
 ## 約定

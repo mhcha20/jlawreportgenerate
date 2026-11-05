@@ -4,3 +4,4 @@ var/
 data/
 out/
 *.pdf
+!docs/*.pdf
