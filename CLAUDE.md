@@ -4,6 +4,8 @@
 
 **接手先讀：** `README.md`（點用、部署）、`docs/ARCHITECTURE.md`（檔案、流程、API、擋位、同 Jlaw-report 要同步嘅地方）、`docs/TODO.md`（未驗證、未做、已知坑）。有新進展要更新 `docs/TODO.md`。
 
+**所有網站一覽（12 個 repo、Railway project、部署 branch、網址）：`docs/ALL_SITES.md`。**
+
 ## 呢個項目係咩
 - **主要用途：出報告。** 用戶要求（2026-11-05）：網站攞返 Google Drive 嘅截圖，撳一個掣就 generate **大盤報告**，同之前 Claude Code 排程 session 寫嘅報告一樣，只係改喺網站自己生成。另有每日定時排程。
 - **個股報告**（用戶 2026-11-05 要求「所有個股做法同大盤一樣」）：三份齊出（行動卡＋本體報告＋核對附錄）；網頁「個股報告」分頁揀代號先出（唔自動做晒 115 隻，成本約 US$2–4／隻）。`app/stock.py` StockJob：jlaw-report `/api/shots` 列股票 → Drive 個股截圖（`SROOT` 1xkPBlGhK0SEn2dGIzAINQNIFL33m0hG_，美股 01–17、ETF 01–12、亞洲 01–14；`ADR_TICKERS`（默認 SCHN,NESN,MC,ATD，用戶 2026-11-05 指出係 ADR／外國股，冇內部人申報）第 15 張可缺，網頁照揀得）→ `gen/prep.py images`（裁 Futubull 圖）＋`data` → 上一份報告（行動卡＋本體）→ 美股承襲當日大盤報告（Claude核實版優先）→ 同一個 analyze（Claude，冇就 Grok）→ `gen/build.py`（網站版：`STOCK_STRICT=1` 要 `qa()` ≥20 項（`gen/sqa.py`）、行動卡用 `gen/sig/signals.js`（由 Jlaw-report 原封不動複製，網站改解析規則要同步）解析日期／評等／分數／三條價位／3 警報／未持倉已持倉、`format_stock.py` 格式擋位；**評等同分數要對應**（用戶 2026-11-05 決定每 20 分一級：★ 避免交易 <30｜★★ 不建議 30–49｜★★★ 觀察 50–69｜★★★★ 值得買入 70–89｜★★★★★ 強烈買入 ≥90），唔夾就 build 失敗）。`WORKERS`（默認 2）個 job 同時做；大盤 job 有 MARKET_LOCK 一次一份。**個股格式範本＝2026-10-30 ESTC**（用戶 2026-11-05 指定，「所有格式都照跟」）：`FORMAT_REF_STOCK` 默認 `2026-10-30_ESTC_`，由 Drive 攞三份全文放入 system prompt；`gen/format_stock.py` 按範本篇幅（約六至七成）擋：本體 ≥9 頁、附錄 ≥3 頁、行動卡每格字數、九構面理由 ≥30 字、各部分行數同字數、朗讀稿 ≥550／1800 字等。
