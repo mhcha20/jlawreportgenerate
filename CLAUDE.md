@@ -5,10 +5,11 @@
 ## 呢個項目係咩
 - **主要用途：出報告。** 用戶要求（2026-11-05）：網站攞返 Google Drive 嘅截圖，撳一個掣就 generate **大盤報告**，同之前 Claude Code 排程 session 寫嘅報告一樣，只係改喺網站自己生成。另有每日定時排程。個股報告（行動卡）之後再加。
 - 流程（`app/agent.py`）：經 jlaw-report 網站 API 攞 19 張大盤截圖（`/api/drive/ls`＋Drive 下載）→ `gen/market/prep.py` 攞行情（`/api/ohlcv`）→ 讀上一份大盤報告（`/api/sync`＋`/pdf/<id>`）→ call Claude API（`claude-opus-5-5`，adaptive thinking，effort high，server-side fallback `"default"`，web_search 核實催化劑／日程）→ Claude 寫 work 檔，經自訂工具 `build_report` 跑 `gen/market/build.py`（QA 擋位：≥20 項重算、PDF 文字回查、頁數上限），失敗就將錯誤交返 Claude 改，最多 `MAX_BUILDS` 次 → 成功後俾 Claude 睇每頁縮圖檢查版面 → PDF。
+- **後備 Grok**（用戶 2026-11-05 要求）：Claude API 出錯（`anthropic.APIError`，重試後仍失敗）或拒絕（refusal）時，如有 `XAI_API_KEY` 就由頭改用 xAI Grok（`app/grok.py`，OpenAI 相容 chat completions `https://api.x.ai/v1`，模型 `XAI_MODEL` 默認 `grok-4`）做同一流程；冇 web_search，催化劑／日程標「未核實」。Claude 已經出到過 QA 嘅 PDF 就唔會轉。冇 `ANTHROPIC_API_KEY` 就直接用 Grok。job 記錄 `engine`（claude／grok），網頁標「後備 Grok」。Grok 用量按 `XAI_PRICE_IN／OUT` 估。
 - `gen/`：由 `Jlaw-report/tools/stockreport/` 搬過嚟嘅大盤框架（`market/mlib.py`、`report.py`、`qa.py`、`template_work.py`、`prep.py`、`build.py`、`style.css`）。唯一改動：`build.py` 改用 `gen/render.py`（Python Playwright）出 PDF，唔使 node。兩邊改框架要同步。
 - `app/server.py`：純標準庫 HTTP 伺服器。網頁 `app/static/index.html`（全部 API 要 `x-password`＝`GEN_PASSWORD`）。一次只跑一個 job（`gen/market/data` 共用）。job 紀錄、PDF 存 `DATA_DIR/jobs/<id>/`（Railway volume 掛 `/data`）。重新部署時未完成嘅 job 標失敗，唔會自動重跑（避免重複收費）。
 - 排程：`AUTO_MARKET=1` 時每 15 分鐘查一次，香港時間 `AUTO_START`–`AUTO_END`（默認 06:30–11:30）內，最近美股交易日截圖齊而 Drive 未有報告就自動出一次（失敗唔重試）；`AUTO_UPLOAD=1` 自動上載。
-- 部署：Railway，`Dockerfile`（Playwright Python 映像＋poppler＋Noto 字體），`railway.json` healthcheck `/health`。環境變數：`ANTHROPIC_API_KEY`、`GEN_PASSWORD`、`JLAW_ADMIN_PASSWORD`（＝jlaw-report 嘅 `ADMIN_PASSWORD`，上載用）、選填 `JLAW_SITE`、`DATA_DIR`、`CLAUDE_MODEL`、`CLAUDE_EFFORT`、`MAX_BUILDS`、`AUTO_*`。
+- 部署：Railway，`Dockerfile`（Playwright Python 映像＋poppler＋Noto 字體），`railway.json` healthcheck `/health`。環境變數：`ANTHROPIC_API_KEY`、`XAI_API_KEY`（後備）、`GEN_PASSWORD`、`JLAW_ADMIN_PASSWORD`（＝jlaw-report 嘅 `ADMIN_PASSWORD`，上載用）、選填 `JLAW_SITE`、`DATA_DIR`、`CLAUDE_MODEL`、`CLAUDE_EFFORT`、`MAX_BUILDS`、`AUTO_*`。
 - 本地測試：`CHROMIUM_PATH=/opt/pw-browsers/chromium`；cloud session 嘅網絡連唔到 jlaw-report 網站同 Drive，只可以用假行情測 build／版面。
 - 姊妹項目 `mhcha20/Jlaw-report`（報告中心網站，`jlaw-report-a74806.up.railway.app`）：列報告、買賣訊號、回測。佢入面嘅 `tools/stockreport/` 暫時保留，新服務穩定之前舊排程照用。
 

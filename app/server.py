@@ -1,5 +1,5 @@
 """server.py — JLaw 報告生成網站：撳掣出大盤報告、睇進度、下載 PDF、上載 Drive；另有每日定時排程。
-環境變數：ANTHROPIC_API_KEY（必須）、GEN_PASSWORD（網站密碼，必須）、JLAW_ADMIN_PASSWORD（上載 Drive 用＝jlaw-report 嘅 ADMIN_PASSWORD）、
+環境變數：ANTHROPIC_API_KEY（主力）、XAI_API_KEY（後備：Claude 出錯先用 Grok）、GEN_PASSWORD（網站密碼，必須）、JLAW_ADMIN_PASSWORD（上載 Drive 用＝jlaw-report 嘅 ADMIN_PASSWORD）、
 JLAW_SITE、DATA_DIR（默認 /data，Railway volume）、AUTO_MARKET（1＝開排程）、AUTO_START／AUTO_END（香港時間 HH:MM，默認 06:30／11:30）、AUTO_UPLOAD（1＝自動上載）。"""
 import datetime as dt, hmac, json, os, queue, re, threading, time, traceback, uuid
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -55,7 +55,7 @@ def worker():
         except Exception as e:
             traceback.print_exc(); j['status'] = 'failed'; j['error'] = str(e)[:2000]; log('✗ ' + str(e)[:500])
             if job.pdf: j['pdf'] = os.path.basename(job.pdf); j['pages'] = job.pages   # 之前有過一版成功
-        j['cost'] = job.cost(); j['usage'] = job.usage; j['builds'] = job.builds; j['finished'] = now(); save(j)
+        j['cost'] = job.cost(); j['usage'] = job.usage; j['engine'] = job.engine; j['builds'] = job.builds; j['finished'] = now(); save(j)
 
 
 def scheduler():
@@ -132,7 +132,7 @@ class H(BaseHTTPRequestHandler):
             d = str(body.get('date', ''))
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
             if dt.date.fromisoformat(d).weekday() >= 5: return s._send(400, {'error': f'{d} 係週末，唔係美股交易日'})
-            if not os.environ.get('ANTHROPIC_API_KEY'): return s._send(503, {'error': '伺服器未設定 ANTHROPIC_API_KEY'})
+            if not (os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('XAI_API_KEY')): return s._send(503, {'error': '伺服器未設定 ANTHROPIC_API_KEY／XAI_API_KEY'})
             j, created = new_job(d, upload=bool(body.get('upload')))
             return s._send(200, {'job': j['id'], 'created': created})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/upload', p)

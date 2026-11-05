@@ -127,7 +127,7 @@ async function loadJobs() {
   else $('jobs').innerHTML = d.jobs.map(j => {
     const [t, c] = ST[j.status] || [j.status, ''];
     return `<div class="job"><div class="hd"><b>${esc(j.date)} 大盤報告</b><span class="st ${c}">${t}</span></div>
-      <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
+      <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'grok' ? ' · 後備 Grok' : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
       <div class="mute">${esc(j.error || j.last)}</div>
       <div class="acts">${j.pdf ? `<button class="sec" onclick="openPdf('${j.id}')">睇 PDF</button>` : ''}
         ${j.pdf && canUpload && !j.uploaded ? `<button class="sec" onclick="upload('${j.id}', this)">上載 Drive</button>` : ''}

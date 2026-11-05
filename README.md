@@ -4,6 +4,6 @@ JLaw 報告生成網站：由 Google Drive 截圖，撳一個掣出「美股大�
 
 ## Railway 部署
 1. New Project → Deploy from GitHub repo → `mhcha20/jlawreportgenerate`（用 `Dockerfile`）。
-2. Variables：`ANTHROPIC_API_KEY`、`GEN_PASSWORD`（網站登入密碼）、`JLAW_ADMIN_PASSWORD`（報告中心嘅 ADMIN_PASSWORD，上載用）；要每日自動出就加 `AUTO_MARKET=1`（同 `AUTO_UPLOAD=1`）。
+2. Variables：`ANTHROPIC_API_KEY`、`XAI_API_KEY`（後備：Claude 出錯先用 Grok；選填 `XAI_MODEL`）、`GEN_PASSWORD`（網站登入密碼）、`JLAW_ADMIN_PASSWORD`（報告中心嘅 ADMIN_PASSWORD，上載用）；要每日自動出就加 `AUTO_MARKET=1`（同 `AUTO_UPLOAD=1`）。
 3. 加 Volume，掛載路徑 `/data`（保存報告紀錄同 PDF）。
 4. Settings → Networking → Generate Domain。

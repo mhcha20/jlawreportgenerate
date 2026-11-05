@@ -84,12 +84,19 @@ def data_summary(date):
     return out
 
 
+class ClaudeRefused(Exception): pass
+
+
+def with_model(content, model):
+    return [dict(b, text=b['text'].replace('{MODEL_ID}', model)) if b['type'] == 'text' else b for b in content]
+
+
 class Job:
     def __init__(s, jid, date, folder, log):
         s.id, s.date, s.dir, s.log = jid, date, folder, log
-        s.usage = dict(inp=0, out=0, cread=0, cwrite=0); s.pdf = None; s.builds = 0; s.pages = None
+        s.usage = dict(inp=0, out=0, cread=0, cwrite=0); s.pdf = None; s.builds = 0; s.pages = None; s.engine = None; s.extra_cost = 0.0
 
-    def cost(s): return round(sum(s.usage[k] * PRICE[k] for k in PRICE) / 1e6, 2)
+    def cost(s): return round(sum(s.usage[k] * PRICE[k] for k in PRICE) / 1e6 + s.extra_cost, 2)
 
     def run(s):
         date = s.date
@@ -122,7 +129,7 @@ class Job:
         for t, f, data in imgs:
             content.append({'type': 'text', 'text': f'截圖 {f["name"]}（Drive 建立時間 UTC {f.get("createdTime", "?")}）'})
             content.append(img_block(data))
-        content.append({'type': 'text', 'text': f"""分析交易日 DATE = {date}；香港分析時間 {hk:%Y-%m-%d %H:%M}；模型識別碼 {MODEL}。
+        content.append({'type': 'text', 'text': f"""分析交易日 DATE = {date}；香港分析時間 {hk:%Y-%m-%d %H:%M}；模型識別碼 {{MODEL_ID}}。
 行情已準備好（market/data），以下係重算數字摘要（work 檔用 m 取值，唔好照抄寫死）：
 {json.dumps(summary, ensure_ascii=False)}
 
@@ -130,14 +137,33 @@ class Job:
 {ptxt[:40000] if ptxt else '（冇上一份，第一份）'}
 
 請：①逐張睇晒 19 張圖抄讀數；②同上一份報告比較（包括廣度線係咪停滯）；③用 web_search 核實過去 5 個交易日催化劑同未來一星期美國經濟數據／重要業績日程；④寫完整 work 檔，用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結今日市況分類收尾。"""})
-        msgs = [{'role': 'user', 'content': content}]
-        client = anthropic.Anthropic()
         system = system_prompt()
+        if os.environ.get('ANTHROPIC_API_KEY'):
+            try:
+                return s.run_claude(system, content)
+            except (anthropic.APIError, ClaudeRefused) as e:
+                if s.pdf:   # 已經有一版過咗 QA 嘅 PDF，用住佢，唔使重做
+                    s.log(f'⚠ Claude 最後一步出錯（{type(e).__name__}），用已經過 QA 嘅 PDF'); return
+                if not os.environ.get('XAI_API_KEY'): raise RuntimeError(f'Claude API 出錯：{e}')
+                s.builds = 0
+                s.log(f'⚠ Claude 用唔到（{type(e).__name__}：{str(e)[:200]}），改用 Grok 由頭再做')
+        elif not os.environ.get('XAI_API_KEY'):
+            raise RuntimeError('未設定 ANTHROPIC_API_KEY 或 XAI_API_KEY')
+        else:
+            s.log('⚠ 未設定 ANTHROPIC_API_KEY，直接用 Grok')
+        import grok
+        s.engine = 'grok'
+        return grok.run(s, system, content)
+
+    def run_claude(s, system, content):
+        s.engine = 'claude'
+        msgs = [{'role': 'user', 'content': with_model(content, MODEL)}]
+        client = anthropic.Anthropic()
         for turn in range(MAX_TURNS):
             resp = s.call(client, system, msgs)
             msgs.append({'role': 'assistant', 'content': resp.content})
             if resp.stop_reason == 'refusal':
-                raise RuntimeError(f'Claude 拒絕處理：{getattr(resp, "stop_details", None)}')
+                raise ClaudeRefused(str(getattr(resp, 'stop_details', None)))
             if resp.stop_reason == 'pause_turn': continue
             uses = [b for b in resp.content if b.type == 'tool_use']
             if resp.stop_reason == 'tool_use' and uses:
