@@ -175,6 +175,7 @@ async function checkShots() {
     if (!s.folder) $('shotMsg').innerHTML = `<span class="warn">Drive 未有「${esc(s.name)}」資料夾（截圖未上載？）</span>`;
     else if (s.missing.length) $('shotMsg').innerHTML = `<span class="warn">截圖未齊：${s.have.length}/19，缺 ${esc(s.missing.join('、'))}</span>`;
     else { $('shotMsg').innerHTML = `<span class="ok">✓ 19 張截圖齊（${esc(s.name)}）</span>`; shotsOk = true; }
+    $('shotMsg').innerHTML += chk(s.checked_at);
     $('shots').innerHTML = all.map(t => `<span class="${s.missing.includes(t) ? 'n' : 'y'}">${t}</span>`).join('');
   } catch (e) { $('shotMsg').innerHTML = `<span class="bad">檢查失敗：${esc(e.message)}</span>`; }
   $('go').disabled = !shotsOk;
@@ -289,6 +290,12 @@ async function upload(id, btn) {
   try { await api(`/api/jobs/${id}/upload`, {method: 'POST', body: '{}'}); loadJobs(); } catch (e) { alert('上載失敗：' + e.message); btn.disabled = false; }
 }
 let stocks = [], picked = new Set();
+function chk(at) {   // 最近檢查時間（香港時間）
+  const t = at ? new Date(at) : new Date(); if (isNaN(t)) return '';
+  const h = new Date(t.getTime() + 8 * 3600e3), z = n => String(n).padStart(2, '0');
+  const f = `${z(h.getUTCMonth() + 1)}/${z(h.getUTCDate())} ${z(h.getUTCHours())}:${z(h.getUTCMinutes())}`;
+  return ` <span class="mute">· 最近檢查 ${esc(f)}（香港）</span>`;
+}
 function tab(which) { $('tabM').classList.toggle('on', which === 'M'); $('tabS').classList.toggle('on', which === 'S'); $('cardM').hidden = which !== 'M'; $('cardS').hidden = which !== 'S'; if (which === 'S' && !stocks.length) loadStocks(); }
 $('tabM').onclick = () => tab('M'); $('tabS').onclick = () => tab('S');
 async function loadStocks() {
@@ -297,7 +304,7 @@ async function loadStocks() {
     const r = await api('/api/stocks?date=' + d); stocks = r.rows;
     const ok = stocks.filter(x => x.status === 'ok').length;
     const none = stocks.filter(x => x.status === 'none').length;
-    $('sMsg').innerHTML = `<span class="${ok ? 'ok' : 'warn'}">${stocks.length} 隻股票，${ok} 隻截圖齊${none ? `，${none} 隻呢日未有截圖` : ''}</span>`;
+    $('sMsg').innerHTML = `<span class="${ok ? 'ok' : 'warn'}">${stocks.length} 隻股票，${ok} 隻截圖齊${none ? `，${none} 隻呢日未有截圖` : ''}</span>${chk(r.checked_at)}`;
   } catch (e) { stocks = []; $('sMsg').innerHTML = `<span class="bad">檢查失敗：${esc(e.message)}</span>`; }
   drawStocks(); drawWatch();
 }

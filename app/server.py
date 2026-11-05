@@ -7,6 +7,9 @@ from urllib.parse import urlparse, parse_qs, quote
 from zoneinfo import ZoneInfo
 import jlaw, auth
 
+
+def now_iso(): return dt.datetime.now(dt.timezone.utc).isoformat()
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get('DATA_DIR', '/data' if os.path.isdir('/data') else os.path.join(os.path.dirname(HERE), 'var'))
 JOBS = os.path.join(DATA, 'jobs'); os.makedirs(JOBS, exist_ok=True)
@@ -217,14 +220,15 @@ class H(BaseHTTPRequestHandler):
                 th = jlaw.themes(); rows = []; dc = jlaw.drive_cards(d)
                 mine = {j.get('ticker') for j in all_jobs() if j.get('kind') == 'stock' and j['date'] == d and j['status'] == 'done'}
                 busy = {j.get('ticker') for j in all_jobs() if j.get('kind') == 'stock' and j['date'] == d and j['status'] in ('queued', 'running')}
-                for r in jlaw.stock_list(d):
+                sl, at = jlaw.stock_list(d)
+                for r in sl:
                     x = {k: r.get(k) for k in ('ticker', 'status', 'have', 'need', 'missing', 'layout')}
                     if r.get('kind') == 'ADR': x['layout'] = 'foreign'
                     tk = r.get('ticker', ''); t2 = tk.zfill(5) if tk.isdigit() and len(tk) <= 5 else tk
                     x['theme'], x['name'] = th.get(tk) or th.get(t2) or ('未分類', '')
                     x['done'] = 'busy' if tk in busy else 'site' if tk in mine else 'drive' if tk in dc else ''   # 已經出過／做緊：網頁會提示
                     rows.append(x)
-                return s._send(200, {'date': d, 'rows': rows, 'themes_ok': bool(th)})
+                return s._send(200, {'date': d, 'rows': rows, 'themes_ok': bool(th), 'checked_at': at or now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/market_done':   # 大盤：呢日本站做過／Drive 已有？
             d = (q.get('date') or [''])[0]
@@ -235,7 +239,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 if not d: d = jlaw.date_folders()[0][0]
                 sh = jlaw.market_shots(d)
-                return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing']})
+                return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
         if p == '/api/dates':

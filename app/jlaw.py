@@ -184,12 +184,12 @@ def themes():
 
 
 def stock_list(date):
-    """jlaw-report 截圖檢查：當日每隻股票截圖齊唔齊 → [{ticker,status,…}]"""
-    rows = get_json(f'/api/shots?date={date}')['stocks']['rows']
+    """jlaw-report 截圖檢查：當日每隻股票截圖齊唔齊 → ([{ticker,status,…}], 檢查時間 ISO)"""
+    js = get_json(f'/api/shots?date={date}'); rows = js['stocks']['rows']
     for r in rows:   # ADR：jlaw-report 截圖檢查當美股要 01–17，呢度只缺 15 都當齊
         if r.get('ticker') in ADR and r.get('status') == 'incomplete' and set(r.get('missing') or []) <= {15} and not r.get('extra'):
             r['status'] = 'ok'; r['kind'] = 'ADR'
-    return rows
+    return rows, js.get('at')
 
 
 def stock_shots(ticker, date):
