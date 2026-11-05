@@ -42,7 +42,7 @@ def check(S, T, pages, jlaw_required=False):
         rr = T.get(k) or []
         need(len(rr) >= n_, f'{k} 要 {n_} 行（而家 {len(rr)}）')
         for r in rr:
-            for c in r[1:]:
+            for c in (r[2:] if k == 'regime_rows' else r[1:]):   # regime_rows 第 2 格「判斷」範本都係短標籤，唔計
                 need(_n(c) >= 8, f'{k}「{_txt(r[0])}」有格太短：「{_txt(c)}」（每格要寫具體價位／條件）')
     need(len(T.get('next_rows') or []) >= 5, f'next_rows（下一交易日追蹤）要 ≥5 項（而家 {len(T.get("next_rows") or [])}）')
     need(len(T.get('verify_rows') or []) >= 4, f'verify_rows（需要核實）要 ≥4 項（而家 {len(T.get("verify_rows") or [])}）')
