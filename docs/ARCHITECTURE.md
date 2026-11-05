@@ -67,7 +67,10 @@ jlawreportgenerate（本 repo，Railway）── app/server.py：網頁＋API＋
 - `ANTHROPIC_API_KEY` 有 → Claude（`claude-opus-5-5`，adaptive thinking，effort `high`，`fallbacks:"default"`，`web_search_20260209`，prompt caching，串流）。`anthropic.APIError` 重試後仍失敗或 refusal → 有 `XAI_API_KEY` 就由頭用 Grok；已經有過 QA 嘅 PDF 就用嗰份。
 - 冇 Claude key → 直接 Grok。job 記 `engine`。用量估算：Claude 按 $4／$20（快取讀 $0.2、寫 $5）每百萬 token；Grok 按 `XAI_PRICE_IN`／`OUT`（默認 2／6），**上網搜尋費未計**。
 
-## 4. API（全部要 header `x-password: GEN_PASSWORD`，除咗 `/`、`/health`）
+## 4. API（要登入：Google cookie `jlgen_session`，或者密碼登入未關時 header `x-password`；`/`、`/health`、`/api/me`、`/auth/*` 唔使）
+
+登入：`GET /auth/google` → Google → `GET /auth/callback`（驗 state cookie、換 token、驗 aud／iss／email_verified、email 要喺 `ALLOWED_EMAILS`）→ 發 cookie；`GET /auth/logout` 清 cookie；`GET /api/me` 回 `{user, google, password}`。邏輯喺 `app/auth.py`。
+
 
 | 方法 路徑 | 做咩 |
 |---|---|

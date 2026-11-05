@@ -2,7 +2,7 @@
 
 由 Google Drive 嘅截圖，撳一個掣就出 **美股大盤報告** 同 **個股報告**（行動卡＋本體報告＋核對附錄）。AI（Claude，出錯就轉 Grok）睇圖、上網核實、寫報告，QA 同格式擋位全過先出 PDF，出完可以一撳上載去報告中心。
 
-- 網站：https://jlawreportgenerate-production.up.railway.app （用 `GEN_PASSWORD` 登入）
+- 網站：https://jlawreportgenerate-production.up.railway.app （撳「用 Google 登入」，只有 `ALLOWED_EMAILS` 入面嘅 Gmail 入得）
 - 姊妹網站（報告中心）：https://jlaw-report-a74806.up.railway.app （repo `mhcha20/Jlaw-report`）
 
 > **之後搵 AI 接手：** 叫佢先讀 `CLAUDE.md`（項目背景同規則）、`docs/ARCHITECTURE.md`（結構同流程）、`docs/TODO.md`（未做／已知問題）。
@@ -31,7 +31,9 @@ Project `loving-renewal` → service `jlawreportgenerate`，跟 GitHub `main` �
 
 | 變數 | 用途 |
 |---|---|
-| `GEN_PASSWORD` | 網站登入密碼（必須） |
+| `GOOGLE_CLIENT_ID`／`GOOGLE_CLIENT_SECRET` | 用 Google 登入（可以同報告中心共用同一個 OAuth 用戶端；Google Cloud Console 要加重新導向 URI `https://jlawreportgenerate-production.up.railway.app/auth/callback`） |
+| `ALLOWED_EMAILS` | 准登入嘅 Gmail（逗號分隔；默認 etchan112@gmail.com,manhey@gmail.com） |
+| `GEN_PASSWORD` | 舊密碼登入：只喺未設定 Google 時用（設好 Google 就自動關；`PASSWORD_LOGIN=1` 可以保留） |
 | `ANTHROPIC_API_KEY` | Claude API（主力） |
 | `XAI_API_KEY` | xAI Grok（Claude 出錯時後備；冇 Claude key 就直接用） |
 | `JLAW_ADMIN_PASSWORD` | 報告中心嘅 `ADMIN_PASSWORD`：上載 Drive、讀 J Law 材料、讀股票清單 Sheet（行業分類） |

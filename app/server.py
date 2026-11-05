@@ -3,9 +3,9 @@
 JLAW_SITE、DATA_DIR（默認 /data，Railway volume）、AUTO_MARKET（1＝開排程）、AUTO_START／AUTO_END（香港時間 HH:MM，默認 06:30／11:30）、AUTO_UPLOAD（1＝自動上載）。"""
 import datetime as dt, hmac, json, os, queue, re, threading, time, traceback, uuid
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 from zoneinfo import ZoneInfo
-import jlaw
+import jlaw, auth
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get('DATA_DIR', '/data' if os.path.isdir('/data') else os.path.join(os.path.dirname(HERE), 'var'))
@@ -113,9 +113,47 @@ class H(BaseHTTPRequestHandler):
         for k, v in (extra or {}).items(): s.send_header(k, v)
         s.end_headers(); s.wfile.write(body)
 
-    def _authed(s):
+    def _user(s):
+        """已登入：Google cookie 嘅 email；或者（密碼登入未關）啱密碼 → '密碼'。否則 None"""
+        e = auth.read_cookie(s.headers.get('Cookie'), DATA)
+        if e: return e
         given = s.headers.get('x-password', '')
-        return bool(PW) and hmac.compare_digest(given.encode(), PW.encode())
+        if auth.password_on() and PW and hmac.compare_digest(given.encode(), PW.encode()): return '密碼'
+        return None
+
+    def _authed(s): return bool(s._user())
+
+    def _redirect(s, url, cookies=()):
+        s.send_response(302); s.send_header('Location', url); s.send_header('Cache-Control', 'no-store')
+        for c in cookies: s.send_header('Set-Cookie', c)
+        s.send_header('Content-Length', '0'); s.end_headers()
+
+    def _auth_routes(s, p, q):
+        """/auth/google（去 Google）、/auth/callback（返嚟）、/auth/logout；/api/me 俾網頁知點樣登入"""
+        secure = '; Secure' if auth.base_url(s.headers).startswith('https') else ''
+        if p == '/api/me':
+            return s._send(200, {'user': s._user(), 'google': auth.google_on(), 'password': auth.password_on()}) or True
+        if p == '/auth/google':
+            if not auth.google_on(): return s._send(503, {'error': '未設定 GOOGLE_CLIENT_ID／GOOGLE_CLIENT_SECRET'}) or True
+            st = uuid.uuid4().hex
+            return s._redirect(auth.login_url(s.headers, st), [f'jlgen_state={st}; Path=/auth; Max-Age=600; HttpOnly; SameSite=Lax{secure}']) or True
+        if p == '/auth/callback':
+            st = next((c.split('=', 1)[1] for c in (s.headers.get('Cookie') or '').split(';') if c.strip().startswith('jlgen_state=')), '')
+            err = (q.get('error') or [''])[0]
+            try:
+                if err: raise ValueError('Google 登入取消／失敗：' + err)
+                if not st or not hmac.compare_digest(st.strip(), (q.get('state') or [''])[0]): raise ValueError('登入逾時或者唔係由呢度開始，請再撳一次「用 Google 登入」')
+                email = auth.exchange((q.get('code') or [''])[0], s.headers)
+            except Exception as e:
+                return s._redirect('/?login_error=' + quote(str(e)[:200])) or True
+            if email not in auth.ALLOWED:
+                return s._redirect('/?login_error=' + quote(f'{email} 冇權限登入呢個網站')) or True
+            print('login', email, flush=True)
+            return s._redirect('/', [f'{auth.COOKIE}={auth.make_cookie(email, DATA)}; Path=/; Max-Age={auth.MAX_AGE}; HttpOnly; SameSite=Lax{secure}',
+                                     f'jlgen_state=; Path=/auth; Max-Age=0{secure}']) or True
+        if p == '/auth/logout':
+            return s._redirect('/', [f'{auth.COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure}']) or True
+        return False
 
     def log_message(s, *a): pass
 
@@ -124,8 +162,9 @@ class H(BaseHTTPRequestHandler):
         if p in ('/', '/index.html'):
             return s._send(200, open(os.path.join(HERE, 'static', 'index.html'), 'rb').read(), 'text/html; charset=utf-8')
         if p == '/health': return s._send(200, {'ok': True})
-        if not PW: return s._send(503, {'error': '伺服器未設定 GEN_PASSWORD'})
-        if not s._authed(): return s._send(401, {'error': '密碼錯誤'})
+        if s._auth_routes(p, q): return
+        if not (PW or auth.google_on()): return s._send(503, {'error': '伺服器未設定登入方式（GOOGLE_CLIENT_ID 或 GEN_PASSWORD）'})
+        if not s._authed(): return s._send(401, {'error': '未登入'})
         if p == '/api/jobs':
             return s._send(200, {'jobs': [{k: v for k, v in j.items() if k != 'log'} | {'last': (j['log'] or [''])[-1]} for j in all_jobs()[:30]],
                                  'auto': os.environ.get('AUTO_MARKET') == '1', 'can_upload': bool(os.environ.get('JLAW_ADMIN_PASSWORD'))})
@@ -189,8 +228,8 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(s):
         p = urlparse(s.path).path
-        if not PW: return s._send(503, {'error': '伺服器未設定 GEN_PASSWORD'})
-        if not s._authed(): return s._send(401, {'error': '密碼錯誤'})
+        if not (PW or auth.google_on()): return s._send(503, {'error': '伺服器未設定登入方式（GOOGLE_CLIENT_ID 或 GEN_PASSWORD）'})
+        if not s._authed(): return s._send(401, {'error': '未登入'})
         n = int(s.headers.get('Content-Length') or 0); body = json.loads(s.rfile.read(n) or b'{}') if n else {}
         if p == '/api/auth': return s._send(200, {'ok': True})
         if p == '/api/watchlist':   # 每日清單（存喺 volume，所有裝置共用）

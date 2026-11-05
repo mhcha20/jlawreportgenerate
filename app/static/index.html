@@ -32,6 +32,8 @@ button:disabled { opacity:.45; cursor:default; }
 .acts { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
 .mute { color:var(--mute); font-size:13px; }
 #login { max-width:360px; margin:60px auto; }
+.gbtn { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:13px; border:1px solid var(--line); border-radius:8px; background:#fff; color:#1f1f1f; font-weight:600; text-decoration:none; margin:6px 0 12px; }
+.who { font-size:12px; color:var(--mute); margin-bottom:10px; } .who a { color:var(--pri); }
 .tabs { display:flex; gap:6px; margin-bottom:12px; } .tabs button { flex:1; background:transparent; color:var(--pri); border:1px solid var(--pri); }
 .tabs button.on { background:var(--pri); color:#fff; }
 .slist { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:6px; margin-top:10px; max-height:340px; overflow:auto; }
@@ -61,14 +63,18 @@ button:disabled { opacity:.45; cursor:default; }
 <main>
   <div id="login" class="card" hidden>
     <h2>JLaw 報告生成</h2>
-    <label for="pw">網站密碼</label>
-    <input id="pw" type="password" autocomplete="current-password">
-    <button class="big" id="loginBtn">登入</button>
+    <a class="gbtn" id="gLogin" href="/auth/google" hidden><svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>用 Google 登入</a>
+    <div id="pwBox" hidden>
+      <label for="pw">網站密碼</label>
+      <input id="pw" type="password" autocomplete="current-password">
+      <button class="big" id="loginBtn">登入</button>
+    </div>
     <div class="msg bad" id="loginMsg"></div>
   </div>
 
   <div id="app" hidden>
     <h1>JLaw 報告生成</h1>
+    <div class="who" id="who"></div>
     <div class="sub">由 Google Drive 截圖自動出大盤同個股報告 · AI 睇圖分析、上網核實 · QA 全過先出 PDF</div>
 
     <div class="tabs"><button id="tabM" class="on">大盤報告</button><button id="tabS">個股報告</button></div>
@@ -126,16 +132,21 @@ let PW = ''; try { PW = localStorage.getItem('pw') || ''; } catch (e) {}
 const $ = id => document.getElementById(id);
 const api = async (path, opt = {}) => {
   const r = await fetch(path, {...opt, headers: {'x-password': PW, 'Content-Type': 'application/json', ...(opt.headers || {})}});
-  if (r.status === 401) { showLogin('密碼錯誤'); throw new Error('401'); }
+  if (r.status === 401) { showLogin(PW && auth.password ? '密碼錯誤' : '請先登入'); throw new Error('401'); }
   const j = r.headers.get('content-type')?.includes('json') ? await r.json() : r;
   if (!r.ok) throw new Error(j.error || r.status);
   return j;
 };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function showLogin(m) { $('app').hidden = true; $('login').hidden = false; $('loginMsg').textContent = m || ''; }
+let auth = {google: false, password: true};
+function showLogin(m) {
+  $('app').hidden = true; $('login').hidden = false; $('loginMsg').textContent = m || '';
+  $('gLogin').hidden = !auth.google; $('pwBox').hidden = !auth.password;
+  if (!auth.google && !auth.password) $('loginMsg').textContent = '伺服器未設定登入方式';
+}
 async function login() {
   PW = $('pw').value; try { localStorage.setItem('pw', PW); } catch (e) {}
-  try { await api('/api/auth', {method: 'POST', body: '{}'}); start(); } catch (e) { if (e.message !== '401') $('loginMsg').textContent = e.message; }
+  try { await api('/api/auth', {method: 'POST', body: '{}'}); start('密碼'); } catch (e) { if (e.message !== '401') $('loginMsg').textContent = e.message; }
 }
 $('loginBtn').onclick = login; $('pw').onkeydown = e => { if (e.key === 'Enter') login(); };
 
@@ -320,8 +331,17 @@ $('sgo').onclick = async () => {
     $('sgoMsg').innerHTML = `<span class="ok">已加入 ${r.created} 隻（其餘已經做緊），下面睇進度</span>`; picked.clear(); drawStocks(); loadJobs();
   } catch (e) { $('sgoMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; $('sgo').disabled = false; }
 };
-function start() { $('login').hidden = true; $('app').hidden = false; loadDates(); loadJobs(); loadWatch(); }
-if (PW) api('/api/auth', {method: 'POST', body: '{}'}).then(start).catch(() => {}); else showLogin();
+function start(user) {
+  $('login').hidden = true; $('app').hidden = false;
+  if (user) $('who').innerHTML = (user === '密碼' ? '已用密碼登入' : '已登入：' + esc(user)) + ' · <a href="/auth/logout" id="logout">登出</a>';
+  loadDates(); loadJobs(); loadWatch();
+}
+(async () => {
+  const err = new URLSearchParams(location.search).get('login_error'); if (err) history.replaceState(null, '', '/');
+  try { const r = await fetch('/api/me', {headers: {'x-password': PW}}); const me = await r.json(); auth = me; if (me.user) return start(me.user); } catch (e) {}
+  showLogin(err || '');
+})();
+document.addEventListener('click', e => { if (e.target.id === 'logout') { try { localStorage.removeItem('pw'); } catch (x) {} } });
 </script>
 </body>
 </html>
