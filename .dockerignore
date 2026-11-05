@@ -1,0 +1,5 @@
+.git
+var
+gen/node_modules
+gen/market/data
+**/__pycache__

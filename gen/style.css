@@ -1,0 +1,92 @@
+@font-face{font-family:"NSTC";font-weight:400;src:local("Noto Sans TC")}
+@page{size:A4}
+*{box-sizing:border-box}
+html{font-family:"Noto Sans TC","Noto Sans CJK TC","WenQuanYi Zen Hei",sans-serif;color:#1a1a1a;font-size:8.6pt;line-height:1.55}
+body{margin:0}
+h1{font-size:16pt;margin:0 0 6px;font-weight:700;line-height:1.3}
+.meta{font-size:8.6pt;color:#555;margin:0 0 3px;line-height:1.55}
+h2.sec{font-size:11.5pt;font-weight:700;background:#eef2f7;border-left:4px solid #1f3a5f;margin:14px 0 8px;padding:6px 10px;break-after:avoid;break-inside:avoid}
+h2.sec .n{display:inline-block;margin-right:12px}
+h3{font-size:10pt;color:#1f3a5f;font-weight:700;margin:12px 0 6px;break-after:avoid}
+h4{font-size:8.7pt;color:#1f3a5f;font-weight:700;margin:10px 0 5px;break-after:avoid}
+p{margin:4px 0}
+p.pre{color:#555;font-size:8.4pt;margin:4px 0}
+b,strong{font-weight:700}
+.navy{color:#1f3a5f;font-weight:700}
+table{border-collapse:collapse;width:100%;margin:6px 0 8px;font-size:8.6pt}
+th{background:#1f3a5f;color:#fff;font-weight:700;font-size:8pt;text-align:center;border:.5pt solid #9aa3ae;padding:4px 6px}
+td{border:.5pt solid #9aa3ae;padding:4px 6px;vertical-align:top}
+td.num{text-align:right;white-space:nowrap}
+td.ctr{text-align:center}
+tr{break-inside:avoid}
+table.kv td:first-child{background:#eef2f7;font-weight:700;white-space:nowrap;width:13%}
+tr.g td{background:#eaf4ee}
+tr.r td{background:#fbeeec}
+tr.y td{background:#fdf6e3}
+td.lbl{background:#eef2f7;font-weight:700}
+.box{background:#f7f8fa;border:1px solid #d4d9e0;padding:7px 10px;margin:8px 0;break-inside:avoid;line-height:1.6}
+.box.hi{background:#eef2f7;border-color:#c4ccd8}
+.tag{display:inline-block;border:.6pt solid #9aa3ae;background:#eef2f7;color:#1f3a5f;font-size:7.6pt;border-radius:3px;padding:0 4px;margin:0 2px;line-height:1.35;font-weight:400}
+.warn{color:#1a1a1a}
+ul{margin:3px 0 3px 14px;padding:0}
+li{margin:1px 0}
+.small{font-size:8.4pt;color:#555}
+.pagebreak{break-before:page}
+/* ---- stock V2.0 additions ---- */
+html{font-size:8.4pt}
+.up{color:#1a7f4b;font-weight:700}.dn{color:#c0392b;font-weight:700}
+.hdr{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #1f3a5f;padding-bottom:4px;margin-bottom:5px}
+.hdr h1{margin:0;font-size:15pt}
+.bar{height:3px;background:linear-gradient(90deg,#1f3a5f,#7aa0cf);margin:0 0 5px}
+.info{font-size:8pt;color:#333;margin:2px 0}
+.notice{background:#fdf6e3;border:1px solid #e3d3a0;padding:4px 8px;font-size:7.8pt;margin:4px 0}
+.stats{display:flex;gap:6px;margin:6px 0;flex-wrap:nowrap}
+.stats div{flex:1;border:1px solid #d4d9e0;background:#f7f8fa;padding:3px 5px;text-align:center;white-space:nowrap}
+.stats b{display:block;font-size:10pt}.stats span{font-size:7.2pt;color:#555}
+.concl{display:flex;border:1.5px solid #1f3a5f;margin:6px 0;break-inside:avoid}
+.concl .l{flex:1;padding:8px 12px;background:#eef2f7}
+.concl .l .st{font-size:15pt;color:#b8860b;letter-spacing:2px}
+.concl .l .rt{font-size:12pt;font-weight:700}
+.concl .r{width:30%;text-align:center;background:#1f3a5f;color:#fff;padding:8px}
+.concl .r .sc{font-size:28pt;font-weight:700;line-height:1.1}
+.sec-note{font-size:7.8pt;color:#000;margin:2px 0 6px}
+ul.facts{margin:3px 0 3px 14px}ul.facts li{margin:2px 0}
+svg text{font-family:"Noto Sans TC","Noto Sans CJK TC","WenQuanYi Zen Hei",sans-serif}
+.card td,.card th{font-size:8.4pt;padding:4px 6px}
+.cardn{width:4%;text-align:center;background:#1f3a5f;color:#fff;font-weight:700}
+.page{break-after:page}
+.small12{font-size:8.4pt}
+table.cmp td{font-size:8pt;padding:3px 5px}
+
+table{table-layout:fixed}td,th{overflow-wrap:anywhere;word-break:break-word}
+
+/* ---- reference-style layout (HPE 檔案②) ---- */
+html{font-size:8.6pt}
+h1.big{font-size:19pt;margin:0 0 2px}
+p.subt{font-size:8.6pt;color:#444;margin:0 0 6px}
+.infobox{background:#f4efe6;border:1px solid #d8cfba;padding:6px 9px;font-size:8.2pt;line-height:1.6;margin:4px 0 8px}
+.pill{display:inline-block;border:.6pt solid #999;background:#fff;padding:0 6px;border-radius:3px;margin:0 3px;color:#555}
+.cards{display:flex;gap:8px;margin:6px 0}
+.cd{flex:1;border:1px solid #ddd;padding:7px 9px;border-radius:3px}
+.cd.r{background:#fbe9e7;border-color:#efc3bd}.cd.y{background:#fdf3dc;border-color:#ecd49a}.cd.g{background:#e6f3ea;border-color:#b9d9c3}
+.cd .k{font-size:7.8pt;color:#555}.cd .v{font-size:12.5pt;font-weight:700;margin:2px 0}.cd .s{font-size:7.6pt;color:#555}
+.concl2{background:#e9f0fa;border-left:3px solid #1f3a5f;padding:7px 10px;margin:8px 0;line-height:1.65}
+.concl2 .pl{margin-top:4px;color:#1f3a5f;font-size:8.2pt}
+.two{display:flex;gap:10px;margin:6px 0}
+.pn{flex:1;border:1px solid #d4d9e0;padding:6px 9px;border-radius:3px;background:#fff}
+.pn.bl{border-color:#2e6fb7}
+.pt{font-weight:700;color:#1f3a5f;margin:3px 0}
+.br{display:flex;align-items:center;margin:3px 0}.bn{width:22%}.bb{flex:1;height:9px;background:#e8ebef;margin:0 8px;border-radius:2px}.bb i{display:block;height:100%;border-radius:2px}.bv{width:12%;text-align:right}
+.tagline{font-size:7.6pt;color:#333;border-top:1px solid #ddd;margin-top:8px;padding-top:4px}
+.tg{display:inline-block;border:.6pt solid #888;border-radius:2px;background:#f3f4f6;font-size:7pt;padding:0 3px;margin-right:2px;line-height:1.35;color:#222}
+.band{display:flex;align-items:center;border-bottom:2px solid #1f3a5f;padding-bottom:4px;margin-bottom:8px}
+.band .chip{background:#1f3a5f;color:#fff;padding:1px 7px;font-weight:700;font-size:8pt;border-radius:2px}
+.band .bt{font-size:14pt;font-weight:700;margin-left:9px;flex:1}.band .bp{font-size:8pt;color:#555}
+h2.sec{background:none;border-left:0;border-bottom:1px solid #1f3a5f;padding:2px 0;margin:12px 0 6px;font-size:10.5pt}
+h2.sec .ss{font-size:7.8pt;font-weight:400;color:#555;margin-left:6px}
+th{background:#eaeef4;color:#1f3a5f;border:.5pt solid #c2c9d3}
+.now{background:#f3efe6;padding:6px 9px;margin:6px 0;border:1px solid #ddd}
+.concl3{display:flex;gap:18px;background:#f0f3f8;border:1px solid #d4d9e0;padding:6px 10px;margin:6px 0}
+.pg{break-before:page}
+.chtitle{font-weight:700;font-size:9pt;margin:2px 0 4px}
+p.lead{margin:4px 0}
