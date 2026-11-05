@@ -127,6 +127,37 @@ SROOT = '1xkPBlGhK0SEn2dGIzAINQNIFL33m0hG_'   # 個股截圖根資料夾：<代�
 ADR = {x.strip().upper() for x in os.environ.get('ADR_TICKERS', 'SCHN,NESN,MC,ATD').split(',') if x.strip()}
 
 
+_THEMES = {'at': 0, 'map': {}}
+
+
+def _csv_rows(text):
+    import csv
+    return list(csv.reader(io.StringIO(text)))
+
+
+def themes():
+    """股票清單 Google Sheet（第一個分頁「個股 research list」）：A 欄 Focus Theme＝行業／主題、B 欄名、C 欄代號 → {代號: (主題, 名)}。
+    經 jlaw-report /api/sheet（要 JLAW_ADMIN_PASSWORD，報告中心要已連接 Google）；1 小時快取；讀唔到就回傳上次結果（或空）。"""
+    import time
+    if _THEMES['map'] and time.time() - _THEMES['at'] < 3600: return _THEMES['map']
+    pw = os.environ.get('JLAW_ADMIN_PASSWORD', '')
+    if not pw: return _THEMES['map']
+    try:
+        with _open(SITE + '/api/sheet', headers={'x-admin-password': pw}, timeout=60) as r: csv_text = json.load(r)['csv']
+        out = {}
+        for row in _csv_rows(csv_text)[1:]:
+            if len(row) < 3: continue
+            th, name, t = row[0].strip(), row[1].strip(), row[2].strip().upper()
+            if not t or not th or t in ('TICKER SYMBOL',) or '大盤' in t: continue
+            th = re.sub(r'\s*[（(]\s*續\s*[）)]\s*$', '', th)            # 「AI基建 (續)」併入「AI基建」
+            if t.isdigit(): t = t.zfill(5) if len(t) <= 5 else t           # 港股 66 → 00066（同截圖資料夾一致）
+            out.setdefault(t, (th, name))
+        _THEMES.update(at=time.time(), map=out)
+    except Exception as e:
+        print('themes', e, flush=True); _THEMES['at'] = time.time() - 3000   # 失敗 10 分鐘後再試
+    return _THEMES['map']
+
+
 def stock_list(date):
     """jlaw-report 截圖檢查：當日每隻股票截圖齊唔齊 → [{ticker,status,…}]"""
     rows = get_json(f'/api/shots?date={date}')['stocks']['rows']

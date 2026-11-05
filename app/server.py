@@ -99,7 +99,8 @@ class H(BaseHTTPRequestHandler):
     def _send(s, code, body, ctype='application/json; charset=utf-8', extra=None):
         if isinstance(body, (dict, list)): body = json.dumps(body, ensure_ascii=False).encode()
         elif isinstance(body, str): body = body.encode()
-        s.send_response(code); s.send_header('Content-Type', ctype); s.send_header('Content-Length', str(len(body))); s.send_header('Cache-Control', 'no-store')
+        s.send_response(code); s.send_header('Content-Type', ctype); s.send_header('Content-Length', str(len(body)))
+        if 'Cache-Control' not in (extra or {}): s.send_header('Cache-Control', 'no-store')
         for k, v in (extra or {}).items(): s.send_header(k, v)
         s.end_headers(); s.wfile.write(body)
 
@@ -122,6 +123,25 @@ class H(BaseHTTPRequestHandler):
         m = re.fullmatch(r'/api/jobs/([\w-]+)', p)
         if m:
             j = load(m.group(1)); return s._send(200, j) if j else s._send(404, {'error': '冇呢個 job'})
+        m = re.fullmatch(r'/api/jobs/([\w-]+)/page', p)   # 網頁內閱讀：PDF 第 p 頁轉 PNG（快取喺 job 資料夾）
+        if m:
+            j = load(m.group(1)); names = (j or {}).get('pdfs') or ([j['pdf']] if j and j.get('pdf') else [])
+            i, pg = int((q.get('i') or ['0'])[0]), int((q.get('p') or ['1'])[0])
+            if not names or not 0 <= i < len(names) or pg < 1: return s._send(404, {'error': '未有 PDF'})
+            folder = os.path.join(JOBS, j['id']); pdf = os.path.join(folder, names[i])
+            if not j.get('npages') or str(i) not in j['npages']:
+                import subprocess
+                info = subprocess.run(['pdfinfo', pdf], capture_output=True, text=True).stdout
+                j.setdefault('npages', {})[str(i)] = int(re.search(r'Pages:\s+(\d+)', info).group(1)); save(j)
+            n = j['npages'][str(i)]
+            if (q.get('count') or [''])[0]: return s._send(200, {'pages': n, 'name': names[i]})
+            if pg > n: return s._send(404, {'error': '冇呢頁'})
+            png = os.path.join(folder, f'view_{i}_{pg}.png')
+            if not os.path.exists(png):
+                import subprocess
+                subprocess.run(['pdftoppm', '-r', '110', '-png', '-singlefile', '-f', str(pg), '-l', str(pg), pdf, png[:-4]], capture_output=True, timeout=120)
+            if not os.path.exists(png): return s._send(500, {'error': '轉圖失敗'})
+            return s._send(200, open(png, 'rb').read(), 'image/png', {'Cache-Control': 'private, max-age=86400'})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/pdf', p)
         if m:
             j = load(m.group(1)); names = (j or {}).get('pdfs') or ([j['pdf']] if j and j.get('pdf') else [])
@@ -133,7 +153,15 @@ class H(BaseHTTPRequestHandler):
         if p == '/api/stocks':
             d = (q.get('date') or [''])[0]
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
-            try: return s._send(200, {'date': d, 'rows': [{k: r.get(k) for k in ('ticker', 'status', 'have', 'need', 'missing', 'kind')} for r in jlaw.stock_list(d)]})
+            try:
+                th = jlaw.themes(); rows = []
+                for r in jlaw.stock_list(d):
+                    x = {k: r.get(k) for k in ('ticker', 'status', 'have', 'need', 'missing', 'layout')}
+                    if r.get('kind') == 'ADR': x['layout'] = 'foreign'
+                    tk = r.get('ticker', ''); t2 = tk.zfill(5) if tk.isdigit() and len(tk) <= 5 else tk
+                    x['theme'], x['name'] = th.get(tk) or th.get(t2) or ('未分類', '')
+                    rows.append(x)
+                return s._send(200, {'date': d, 'rows': rows, 'themes_ok': bool(th)})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/shots':
             d = (q.get('date') or [''])[0]

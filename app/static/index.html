@@ -38,6 +38,21 @@ button:disabled { opacity:.45; cursor:default; }
 .slist label { display:flex; gap:5px; align-items:center; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:5px 7px; color:var(--ink); margin:0; }
 .slist label.bad { color:var(--mute); } .slist input { width:auto; }
 .srow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; } .srow input[type=search] { flex:1; min-width:140px; }
+.srow select { width:auto; flex:0 0 auto; padding:6px 8px; font-size:14px; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.chips button { background:transparent; color:var(--ink); border:1px solid var(--line); padding:5px 10px; font-size:13px; font-weight:500; border-radius:16px; }
+.chips button.on { background:var(--pri); color:#fff; border-color:var(--pri); }
+.slist .grp { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; color:var(--mute); margin-top:6px; }
+.slist .grp:first-child { margin-top:0; } .slist .grp button { padding:3px 9px; font-size:12px; font-weight:500; }
+.slist label small { color:var(--mute); font-size:11px; margin-left:auto; }
+#viewer { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; display:flex; flex-direction:column; }
+#viewer[hidden] { display:none; }
+#viewer .vbar { display:flex; gap:8px; align-items:center; padding:10px 12px; background:var(--card); border-bottom:1px solid var(--line); }
+#viewer .vbar b { flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#viewer .vbar button { padding:7px 11px; font-size:13px; }
+#viewer .vbody { flex:1; overflow:auto; padding:12px; -webkit-overflow-scrolling:touch; }
+#viewer .vbody img { display:block; width:100%; max-width:900px; margin:0 auto 10px; background:#fff; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+#viewer .vbody .mute { color:#eee; text-align:center; }
 </style>
 </head>
 <body>
@@ -76,7 +91,11 @@ button:disabled { opacity:.45; cursor:default; }
         <div style="flex:0"><button class="sec" id="sreload">重新檢查</button></div>
       </div>
       <div class="msg" id="sMsg"></div>
-      <div class="srow"><input type="search" id="sfind" placeholder="搵代號，例如 NVDA"><button class="sec" id="sall">揀晒截圖齊嘅</button><button class="sec" id="snone">清除</button></div>
+      <div class="srow"><input type="search" id="sfind" placeholder="搵代號／名稱">
+        <select id="ssort" aria-label="排列"><option value="theme">按行業分組</option><option value="code">按代號 A–Z／數字</option></select></div>
+      <div class="chips" id="smkt"></div>
+      <div class="chips" id="stheme"></div>
+      <div class="srow"><button class="sec" id="sall">揀晒顯示中截圖齊嘅</button><button class="sec" id="snone">清除</button></div>
       <div class="slist" id="slist"></div>
       <label class="chk"><input type="checkbox" id="sup"> 完成後自動上載到報告中心（Drive）</label>
       <button class="big" id="sgo" disabled>出報告</button>
@@ -91,6 +110,10 @@ button:disabled { opacity:.45; cursor:default; }
     </div>
   </div>
 </main>
+<div id="viewer" hidden>
+  <div class="vbar"><b id="vtitle"></b><button class="sec" id="vdl">下載 PDF</button><button class="sec" id="vnew">新分頁開</button><button id="vclose">閂</button></div>
+  <div class="vbody" id="vbody"></div>
+</div>
 <script>
 let PW = ''; try { PW = localStorage.getItem('pw') || ''; } catch (e) {}
 const $ = id => document.getElementById(id);
@@ -162,11 +185,37 @@ async function loadJobs() {
 }
 async function fillLog(id) { try { const j = await api('/api/jobs/' + id); const el = $('log-' + id); if (el) { el.textContent = j.log.join('\n'); el.scrollTop = el.scrollHeight; } } catch (e) {} }
 function toggleLog(id) { const el = $('log-' + id); el.hidden = !el.hidden; if (el.hidden) openLog.delete(id); else { openLog.add(id); fillLog(id); } }
+// 喺同一版睇 PDF：伺服器將每頁轉做圖片（手機睇得順），另有下載／新分頁
+let vCur = null, vUrls = [];
+function closeViewer() { $('viewer').hidden = true; $('vbody').innerHTML = ''; vUrls.forEach(u => URL.revokeObjectURL(u)); vUrls = []; document.body.style.overflow = ''; vCur = null; }
 async function openPdf(id, i = 0) {
-  const w = window.open('', '_blank');
-  try { const r = await api(`/api/jobs/${id}/pdf?i=${i}`); const b = await r.blob(); const u = URL.createObjectURL(b); if (w) w.location = u; else location = u; }
-  catch (e) { if (w) w.close(); alert(e.message); }
+  vCur = {id, i}; $('viewer').hidden = false; document.body.style.overflow = 'hidden';
+  $('vtitle').textContent = '載入中…'; $('vbody').innerHTML = '<div class="mute">載入中…</div>';
+  try {
+    const info = await api(`/api/jobs/${id}/page?i=${i}&count=1`);
+    if (!vCur || vCur.id !== id || vCur.i !== i) return;
+    $('vtitle').textContent = info.name.replace(/\.pdf$/i, '') + `（${info.pages} 頁）`; $('vbody').innerHTML = '';
+    for (let p = 1; p <= info.pages; p++) {
+      const img = document.createElement('img'); img.alt = `第 ${p} 頁`; $('vbody').appendChild(img);
+      const r = await api(`/api/jobs/${id}/page?i=${i}&p=${p}`); const u = URL.createObjectURL(await r.blob());
+      if (!vCur || vCur.id !== id || vCur.i !== i) { URL.revokeObjectURL(u); return; }
+      vUrls.push(u); img.src = u;
+    }
+  } catch (e) { $('vbody').innerHTML = `<div class="mute">開唔到：${esc(e.message)}</div>`; }
 }
+async function pdfBlob() { const r = await api(`/api/jobs/${vCur.id}/pdf?i=${vCur.i}`); return r.blob(); }
+$('vclose').onclick = closeViewer;
+$('viewer').onclick = e => { if (e.target.id === 'viewer') closeViewer(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('viewer').hidden) closeViewer(); });
+$('vdl').onclick = async () => {
+  if (!vCur) return;
+  try { const b = await pdfBlob(); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = $('vtitle').textContent.replace(/（\d+ 頁）$/, '') + '.pdf'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
+  catch (e) { alert(e.message); }
+};
+$('vnew').onclick = async () => {
+  if (!vCur) return; const w = window.open('', '_blank');
+  try { const u = URL.createObjectURL(await pdfBlob()); if (w) w.location = u; else location = u; } catch (e) { if (w) w.close(); alert(e.message); }
+};
 async function upload(id, btn) {
   if (!confirm('上載到報告中心 Drive？（同名舊檔會放入垃圾桶）')) return;
   btn.disabled = true;
@@ -184,17 +233,49 @@ async function loadStocks() {
   } catch (e) { stocks = []; $('sMsg').innerHTML = `<span class="bad">檢查失敗：${esc(e.message)}</span>`; }
   drawStocks();
 }
-function drawStocks() {
+const MKT = [['all', '全部'], ['us', '美股'], ['etf', 'ETF'], ['asia', '亞洲'], ['foreign', '外國股'], ['bad', '截圖未齊']];
+let sMkt = 'all', sTheme = 'all';
+try { const v = JSON.parse(localStorage.getItem('sview') || '{}'); if (v.sort) $('ssort').value = v.sort; if (v.mkt) sMkt = v.mkt; } catch (e) {}
+const mktOf = x => x.layout === 'etf' ? 'etf' : x.layout === 'asia' ? 'asia' : x.layout === 'foreign' ? 'foreign' : 'us';
+// 代號排序：英文字母 A–Z 先，再到數字代號由細到大
+const codeCmp = (a, b) => { const na = /^\d+$/.test(a), nb = /^\d+$/.test(b); return na !== nb ? (na ? 1 : -1) : na ? Number(a) - Number(b) : a.localeCompare(b); };
+function shown() {
   const f = $('sfind').value.trim().toUpperCase();
-  $('slist').innerHTML = stocks.filter(x => !f || x.ticker.includes(f)).map(x => {
-    const ok = x.status === 'ok';
-    return `<label class="${ok ? '' : 'bad'}" title="${ok ? '截圖齊' : '截圖未齊' + (x.missing && x.missing.length ? '，缺 ' + x.missing.join('、') : '')}"><input type="checkbox" ${ok ? '' : 'disabled'} ${picked.has(x.ticker) ? 'checked' : ''} onchange="pick('${x.ticker}', this.checked)">${esc(x.ticker)}${ok ? '' : ' ✗'}</label>`;
-  }).join('');
+  return stocks.filter(x => (!f || x.ticker.includes(f) || (x.name || '').toUpperCase().includes(f))
+    && (sMkt === 'all' || (sMkt === 'bad' ? x.status !== 'ok' : mktOf(x) === sMkt))
+    && (sTheme === 'all' || (x.theme || '未分類') === sTheme)).sort((a, b) => codeCmp(a.ticker, b.ticker));
+}
+function chipRow(el, items, cur, set) {
+  el.innerHTML = items.map(([k, label]) => `<button class="${k === cur ? 'on' : ''}" data-k="${esc(k)}">${esc(label)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => b.onclick = () => { set(b.dataset.k); drawStocks(); });
+}
+function box(x) {
+  const ok = x.status === 'ok';
+  const tip = (x.name ? x.name + '｜' : '') + (ok ? '截圖齊' : '截圖未齊' + (x.missing && x.missing.length ? '，缺 ' + x.missing.join('、') : ''));
+  return `<label class="${ok ? '' : 'bad'}" title="${esc(tip)}"><input type="checkbox" ${ok ? '' : 'disabled'} ${picked.has(x.ticker) ? 'checked' : ''} onchange="pick('${x.ticker}', this.checked)">${esc(x.ticker)}${ok ? '' : ' ✗'}${mktOf(x) === 'etf' ? '<small>ETF</small>' : ''}</label>`;
+}
+function drawStocks() {
+  try { localStorage.setItem('sview', JSON.stringify({sort: $('ssort').value, mkt: sMkt})); } catch (e) {}
+  const cnt = k => stocks.filter(x => k === 'all' || (k === 'bad' ? x.status !== 'ok' : mktOf(x) === k)).length;
+  chipRow($('smkt'), MKT.filter(([k]) => k === 'all' || cnt(k)).map(([k, l]) => [k, `${l} ${cnt(k)}`]), sMkt, k => sMkt = k);
+  const themes = [...new Set(stocks.map(x => x.theme || '未分類'))].sort((a, b) => (a === '未分類') - (b === '未分類') || a.localeCompare(b, 'zh-Hant'));
+  $('stheme').hidden = themes.length < 2;
+  if (!themes.includes(sTheme)) sTheme = 'all';
+  chipRow($('stheme'), [['all', '全部行業'], ...themes.map(t => [t, t])], sTheme, k => sTheme = k);
+  const list = shown();
+  if (!list.length) $('slist').innerHTML = '<div class="mute" style="grid-column:1/-1">冇符合嘅股票</div>';
+  else if ($('ssort').value === 'theme') {
+    const groups = {}; list.forEach(x => (groups[x.theme || '未分類'] ||= []).push(x));
+    $('slist').innerHTML = themes.filter(t => groups[t]).map(t => `<div class="grp"><span>${esc(t)}（${groups[t].length}）</span><button class="sec" data-t="${esc(t)}">揀晒呢組</button></div>` + groups[t].map(box).join('')).join('');
+    $('slist').querySelectorAll('.grp button').forEach(b => b.onclick = () => pickGroup(b.dataset.t));
+  } else $('slist').innerHTML = list.map(box).join('');
   $('sgo').disabled = !picked.size; $('sgo').textContent = picked.size ? `出報告（${picked.size} 隻，約 US$${picked.size * 2}–${picked.size * 4}）` : '出報告';
 }
+function pickGroup(t) { shown().filter(x => (x.theme || '未分類') === t && x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); }
+$('ssort').onchange = drawStocks;
 function pick(t, on) { on ? picked.add(t) : picked.delete(t); drawStocks(); }
 $('sfind').oninput = drawStocks; $('sreload').onclick = loadStocks; $('sdate').onchange = () => { picked.clear(); loadStocks(); };
-$('sall').onclick = () => { stocks.filter(x => x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); };
+$('sall').onclick = () => { shown().filter(x => x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); };
 $('snone').onclick = () => { picked.clear(); drawStocks(); };
 $('sgo').onclick = async () => {
   if (picked.size > 5 && !confirm(`出 ${picked.size} 隻股票報告，估計 US$${picked.size * 2}–${picked.size * 4}、要 ${Math.ceil(picked.size / 2) * 15} 分鐘左右。確定？`)) return;
