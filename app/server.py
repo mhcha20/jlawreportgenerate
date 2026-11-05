@@ -15,6 +15,15 @@ HKZ = ZoneInfo('Asia/Hong_Kong')
 Q = queue.Queue(); LOCK = threading.Lock()
 
 
+WATCH = os.path.join(DATA, 'watchlist.json')
+WATCH_DEFAULT = ['CAT', 'FPS', 'AAPL', 'ESTC', 'BE', 'XLV', 'PLTR', 'NVDA', 'MCD', 'SPCX', 'WM', 'COPX']   # 用戶 2026-11-06 每日睇嘅股票
+
+
+def watchlist():
+    try: return json.load(open(WATCH, encoding='utf-8'))['tickers']
+    except Exception: return list(WATCH_DEFAULT)
+
+
 def now(): return dt.datetime.now(HKZ).strftime('%Y-%m-%d %H:%M:%S')
 def jpath(jid): return os.path.join(JOBS, jid, 'job.json')
 def load(jid):
@@ -170,6 +179,7 @@ class H(BaseHTTPRequestHandler):
                 sh = jlaw.market_shots(d)
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing']})
             except Exception as e: return s._send(502, {'error': str(e)})
+        if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
         if p == '/api/dates':
             try:
                 md = [d for d, _ in jlaw.date_folders()[:30]]; sd, sdef = jlaw.stock_dates(md)
@@ -183,6 +193,13 @@ class H(BaseHTTPRequestHandler):
         if not s._authed(): return s._send(401, {'error': '密碼錯誤'})
         n = int(s.headers.get('Content-Length') or 0); body = json.loads(s.rfile.read(n) or b'{}') if n else {}
         if p == '/api/auth': return s._send(200, {'ok': True})
+        if p == '/api/watchlist':   # 每日清單（存喺 volume，所有裝置共用）
+            ts = []
+            for x in body.get('tickers') or []:
+                x = str(x).strip().upper()
+                if re.fullmatch(r'[A-Z0-9.]{1,10}', x) and x not in ts: ts.append(x)
+            with LOCK: json.dump({'tickers': ts, 'at': now()}, open(WATCH, 'w', encoding='utf-8'), ensure_ascii=False)
+            return s._send(200, {'tickers': ts})
         if p == '/api/generate':
             d = str(body.get('date', ''))
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})

@@ -39,6 +39,8 @@ button:disabled { opacity:.45; cursor:default; }
 .slist label.bad { color:var(--mute); } .slist input { width:auto; }
 .srow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; } .srow input[type=search] { flex:1; min-width:140px; }
 .srow select { width:auto; flex:0 0 auto; padding:6px 8px; font-size:14px; }
+.watch { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; padding:10px; border:1px dashed var(--line); border-radius:10px; }
+.watch #wlist { flex-basis:100%; font-size:12px; }
 .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
 .chips button { background:transparent; color:var(--ink); border:1px solid var(--line); padding:5px 10px; font-size:13px; font-weight:500; border-radius:16px; }
 .chips button.on { background:var(--pri); color:#fff; border-color:var(--pri); }
@@ -95,6 +97,11 @@ button:disabled { opacity:.45; cursor:default; }
         <select id="ssort" aria-label="排列"><option value="theme">按行業分組</option><option value="code">按代號 A–Z／數字</option></select></div>
       <div class="chips" id="smkt"></div>
       <div class="chips" id="stheme"></div>
+      <div class="watch">
+        <button id="wpick">⭐ 每日清單</button>
+        <button class="sec" id="wsave">將而家剔咗嘅存做每日清單</button>
+        <div class="mute" id="wlist"></div>
+      </div>
       <div class="srow"><button class="sec" id="sall">揀晒顯示中截圖齊嘅</button><button class="sec" id="snone">清除</button></div>
       <div class="slist" id="slist"></div>
       <label class="chk"><input type="checkbox" id="sup"> 完成後自動上載到報告中心（Drive）</label>
@@ -234,7 +241,7 @@ async function loadStocks() {
     const none = stocks.filter(x => x.status === 'none').length;
     $('sMsg').innerHTML = `<span class="${ok ? 'ok' : 'warn'}">${stocks.length} 隻股票，${ok} 隻截圖齊${none ? `，${none} 隻呢日未有截圖` : ''}</span>`;
   } catch (e) { stocks = []; $('sMsg').innerHTML = `<span class="bad">檢查失敗：${esc(e.message)}</span>`; }
-  drawStocks();
+  drawStocks(); drawWatch();
 }
 const MKT = [['all', '全部'], ['ok', '截圖齊'], ['us', '美股'], ['etf', 'ETF'], ['asia', '亞洲'], ['foreign', '外國股'], ['bad', '截圖未齊／未有']];
 let sMkt = 'all', sTheme = 'all';
@@ -279,6 +286,30 @@ function pickGroup(t) { shown().filter(x => (x.theme || '未分類') === t && x.
 $('ssort').onchange = drawStocks;
 function pick(t, on) { on ? picked.add(t) : picked.delete(t); drawStocks(); }
 $('sfind').oninput = drawStocks; $('sreload').onclick = loadStocks; $('sdate').onchange = () => { picked.clear(); loadStocks(); };
+// 每日清單：一撳就剔晒（截圖未齊嘅會列出），剔完可以照改；改完撳「存做每日清單」
+let watch = [];
+async function loadWatch() { try { watch = (await api('/api/watchlist')).tickers; } catch (e) {} drawWatch(); }
+function drawWatch() {
+  $('wpick').textContent = `⭐ 每日清單（${watch.length}）`;
+  if (!watch.length) { $('wlist').textContent = '未有清單：剔好股票再撳「存做每日清單」'; return; }
+  const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
+  $('wlist').innerHTML = watch.map(t => { const x = by[t]; const st = !stocks.length ? '' : !x ? '（冇呢隻）' : x.status === 'ok' ? '' : x.status === 'none' ? '（未有截圖）' : '（截圖未齊）';
+    return `<span class="${st ? 'warn' : ''}">${esc(t)}${st}</span>`; }).join('、');
+}
+$('wpick').onclick = () => {
+  const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
+  const ok = watch.filter(t => by[t] && by[t].status === 'ok'), skip = watch.filter(t => !ok.includes(t));
+  picked.clear(); ok.forEach(t => picked.add(t));
+  sMkt = 'all'; sTheme = 'all'; $('sfind').value = ''; drawStocks();
+  $('sgoMsg').innerHTML = `<span class="ok">已剔 ${ok.length} 隻</span>` + (skip.length ? `<span class="warn">；${esc(skip.join('、'))} 呢日截圖未齊／未有，冇剔</span>` : '');
+};
+$('wsave').onclick = async () => {
+  if (!picked.size) { alert('先剔好要嘅股票'); return; }
+  const ts = [...picked].sort(codeCmp);
+  if (!confirm(`將每日清單改做呢 ${ts.length} 隻？\n${ts.join('、')}`)) return;
+  try { watch = (await api('/api/watchlist', {method: 'POST', body: JSON.stringify({tickers: ts})})).tickers; drawWatch(); $('sgoMsg').innerHTML = '<span class="ok">每日清單已更新</span>'; }
+  catch (e) { alert('存唔到：' + e.message); }
+};
 $('sall').onclick = () => { shown().filter(x => x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); };
 $('snone').onclick = () => { picked.clear(); drawStocks(); };
 $('sgo').onclick = async () => {
@@ -289,7 +320,7 @@ $('sgo').onclick = async () => {
     $('sgoMsg').innerHTML = `<span class="ok">已加入 ${r.created} 隻（其餘已經做緊），下面睇進度</span>`; picked.clear(); drawStocks(); loadJobs();
   } catch (e) { $('sgoMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; $('sgo').disabled = false; }
 };
-function start() { $('login').hidden = true; $('app').hidden = false; loadDates(); loadJobs(); }
+function start() { $('login').hidden = true; $('app').hidden = false; loadDates(); loadJobs(); loadWatch(); }
 if (PW) api('/api/auth', {method: 'POST', body: '{}'}).then(start).catch(() => {}); else showLogin();
 </script>
 </body>
