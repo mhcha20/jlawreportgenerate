@@ -207,7 +207,7 @@ class Job:
         s.log(f'第 {s.builds} 次 build…')
         try:
             p = subprocess.run([sys.executable, os.path.join(GEN, 'market', 'build.py'), s.date, wp, '--out', s.dir], capture_output=True, text=True, timeout=600,
-                               cwd=GEN)
+                               cwd=GEN, env={**os.environ, 'MARKET_SUFFIX': 'Grok核實版' if s.engine == 'grok' else 'Claude核實版'})
         except subprocess.TimeoutExpired:
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 超時（>10 分鐘）'}
         out = (p.stdout + '\n' + p.stderr).strip()

@@ -8,8 +8,8 @@ MODEL = os.environ.get('XAI_MODEL', 'grok-4')
 PRICE_IN = float(os.environ.get('XAI_PRICE_IN', '3'))
 PRICE_OUT = float(os.environ.get('XAI_PRICE_OUT', '15'))
 MAX_TURNS = 30
-NOTE = ('（後備模式：今次由 xAI Grok 代替 Claude 做，冇 web_search 工具。過去 5 日催化劑同未來一星期日程只可以寫你肯定嘅已知事項，'
-        '其餘一律標「未核實」，唔好補造；S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「Claude API 用唔到，後備模型」。）')
+NOTE = ('（今次由 xAI Grok 做，冇 web_search 工具。過去 5 日催化劑同未來一星期日程只可以寫你肯定嘅已知事項，'
+        '其餘一律標「未核實」，唔好補造；S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「由 xAI Grok 生成（後備模型）」。）')
 
 TOOLS = [{'type': 'function', 'function': {
     'name': 'build_report',

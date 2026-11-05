@@ -45,7 +45,7 @@ def main():
     wdz = wd(date); title = f'美股大盤分析 {date}（{wdz}）收市'
     fonts = ''.join(f'<link rel="stylesheet" href="file://{ROOT}/node_modules/@fontsource/noto-sans-tc/{x}.css">' for x in ('chinese-traditional-400', 'chinese-traditional-700', 'latin-400', 'latin-700'))
     doc = f'<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>{title}</title>{fonts}<link rel="stylesheet" href="file://{ROOT}/style.css"></head><body>{html}</body></html>'
-    name = f'{date}_美股大盤分析_JW框架_Claude核實版'
+    name = f'{date}_美股大盤分析_JW框架_' + os.environ.get('MARKET_SUFFIX', 'Claude核實版')   # 網站用 Grok 出時＝Grok核實版
     hp, pp = os.path.join(out, name + '.html'), os.path.join(out, name + '.pdf')
     open(hp, 'w', encoding='utf-8').write(doc)
     jf = os.path.join(out, f'jobs_market_{date}.json')
