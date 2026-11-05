@@ -69,7 +69,7 @@ build 有格式擋位（format_check）：任何一節少過範本水平都會�
 
 BUILD_TOOL = {
     'name': 'build_report',
-    'description': '提交完整 work 檔（Python 源碼，要有 BASIS、spec(m)、texts(m, S)、qa(m, S, T)），網站會寫入檔案並跑 market/build.py。'
+    'description': '提交完整 work 檔（Python 源碼，要有 BASIS、spec(m)、texts(m, S)、qa(m, S, T)），網站會寫入檔案並跑 build（大盤 market/build.py；個股 build.py）。'
                    '回傳 build 結果：成功就有頁數、QA 數同每頁縮圖；失敗就有錯誤訊息（照住改，再提交完整 work 檔）。',
     'input_schema': {'type': 'object', 'properties': {'work_py': {'type': 'string', 'description': '完整 work 檔源碼'}},
                      'required': ['work_py'], 'additionalProperties': False},
@@ -108,7 +108,7 @@ def with_model(content, model):
 class Job:
     def __init__(s, jid, date, folder, log):
         s.id, s.date, s.dir, s.log = jid, date, folder, log
-        s.usage = dict(inp=0, out=0, cread=0, cwrite=0); s.pdf = None; s.builds = 0; s.pages = None; s.engine = None; s.extra_cost = 0.0; s.jlaw_required = False; s.ref_name = None; s.ref_txt = ''
+        s.usage = dict(inp=0, out=0, cread=0, cwrite=0); s.pdf = None; s.builds = 0; s.pages = None; s.engine = None; s.extra_cost = 0.0; s.jlaw_required = False; s.ref_name = None; s.ref_txt = ''; s.pdfs = []
 
     def cost(s): return round(sum(s.usage[k] * PRICE[k] for k in PRICE) / 1e6 + s.extra_cost, 2)
 
@@ -166,7 +166,9 @@ class Job:
 J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝發布日期，只用 ≤ 分析交易日嘅）：{jtxt or '（冇）'}
 
 請：①逐張睇晒 19 張圖抄讀數；②同上一份報告比較（包括廣度線係咪停滯）；③用 web_search 核實過去 5 個交易日催化劑同未來一星期美國經濟數據／重要業績日程；④格式要硬性跟足系統提示入面嘅格式範本（每節篇幅同範本一樣詳細）；有 J Law 材料就寫 jlaw_html；⑤寫完整 work 檔，用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結今日市況分類收尾。"""})
-        system = system_prompt(s.ref_name, s.ref_txt)
+        return s.analyze(system_prompt(s.ref_name, s.ref_txt), content)
+
+    def analyze(s, system, content):
         if os.environ.get('ANTHROPIC_API_KEY'):
             try:
                 return s.run_claude(system, content)
@@ -237,9 +239,8 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         wp = os.path.join(s.dir, f'work_{s.builds}.py'); open(wp, 'w', encoding='utf-8').write(b.input['work_py'])
         s.log(f'第 {s.builds} 次 build…')
         try:
-            p = subprocess.run([sys.executable, os.path.join(GEN, 'market', 'build.py'), s.date, wp, '--out', s.dir], capture_output=True, text=True, timeout=600,
-                               cwd=GEN, env={**os.environ, 'MARKET_SUFFIX': 'Grok核實版' if s.engine == 'grok' else 'Claude核實版',
-                                                     'FORMAT_STRICT': os.environ.get('FORMAT_STRICT', '1'), 'JLAW_REQUIRED': '1' if s.jlaw_required else '0'})
+            cmd, env = s.build_cmd(wp)
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=600, cwd=GEN, env={**os.environ, **env})
         except subprocess.TimeoutExpired:
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 超時（>10 分鐘）'}
         out = (p.stdout + '\n' + p.stderr).strip()
@@ -247,11 +248,21 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
             s.log(f'build 未過：{out.splitlines()[-1][:200] if out else "?"}')
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 失敗：\n' + out[-6000:]}
         info = json.loads([l for l in p.stdout.splitlines() if l.startswith('{')][-1])
-        s.pdf, s.pages = info['pdf'], info['pages']
-        s.log(f'build 成功：{info["pages"]} 頁，QA {info["qa_work"]} 項＋PDF 回查 {info["qa_pdf"]} 項')
+        s.on_success(info)
         res = [{'type': 'text', 'text': 'build 成功：' + json.dumps(info, ensure_ascii=False) + '\n以下係每頁縮圖，檢查版面（溢出、空白、表格斷開）。冇問題就收尾；要改就再提交完整 work 檔。'}]
-        pre = os.path.join(s.dir, 'pg')
-        subprocess.run(['pdftoppm', '-r', '45', '-png', s.pdf, pre], capture_output=True)
-        for f in sorted(x for x in os.listdir(s.dir) if x.startswith('pg') and x.endswith('.png')):
-            res.append(img_block(open(os.path.join(s.dir, f), 'rb').read())); os.remove(os.path.join(s.dir, f))
+        for pdf in s.pdfs:
+            pre = os.path.join(s.dir, 'pg')
+            subprocess.run(['pdftoppm', '-r', '45', '-png', pdf, pre], capture_output=True)
+            for f in sorted(x for x in os.listdir(s.dir) if x.startswith('pg') and x.endswith('.png')):
+                res.append(img_block(open(os.path.join(s.dir, f), 'rb').read())); os.remove(os.path.join(s.dir, f))
         return {'type': 'tool_result', 'tool_use_id': b.id, 'content': res}
+
+    # ---- 大盤報告專用（StockJob 覆寫）
+    def build_cmd(s, wp):
+        return ([sys.executable, os.path.join(GEN, 'market', 'build.py'), s.date, wp, '--out', s.dir],
+                {'MARKET_SUFFIX': 'Grok核實版' if s.engine == 'grok' else 'Claude核實版',
+                 'FORMAT_STRICT': os.environ.get('FORMAT_STRICT', '1'), 'JLAW_REQUIRED': '1' if s.jlaw_required else '0'})
+
+    def on_success(s, info):
+        s.pdf, s.pages = info['pdf'], info['pages']; s.pdfs = [s.pdf]
+        s.log(f'build 成功：{info["pages"]} 頁，QA {info["qa_work"]} 項＋PDF 回查 {info["qa_pdf"]} 項')

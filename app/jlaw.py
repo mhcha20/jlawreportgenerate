@@ -119,3 +119,49 @@ def last_us_trading_day(now=None):
     d = ny.date() if ny.hour >= 17 else ny.date() - dt.timedelta(days=1)
     while d.weekday() >= 5: d -= dt.timedelta(days=1)
     return d.isoformat()
+
+
+# ---------------------------------------------------------------- 個股
+SROOT = '1xkPBlGhK0SEn2dGIzAINQNIFL33m0hG_'   # 個股截圖根資料夾：<代號>/<DD mon YYYY>/NN_*.png
+
+
+def stock_list(date):
+    """jlaw-report 截圖檢查：當日每隻股票截圖齊唔齊 → [{ticker,status,…}]"""
+    return get_json(f'/api/shots?date={date}')['stocks']['rows']
+
+
+def stock_shots(ticker, date):
+    """個股截圖：{'folder','files':[{id,name,createdTime}],'kind':'US|ETF|ASIA','missing':[編號],'ok':bool}。規則同 Jlaw-report drive.py：
+    美股要啱啱 01–17；檔名有 Fund_ 當 ETF，要啱啱 01–12；全數字代號當亞洲，01–14 齊就得（15–17 可缺）。"""
+    tf = [x for x in ls(SROOT) if x['name'].strip() == ticker]
+    if not tf: return {'folder': None, 'files': [], 'kind': None, 'missing': [], 'ok': False, 'why': f'Drive 冇 {ticker} 截圖資料夾'}
+    fname = folder_name(date)
+    df = [x for x in ls(tf[0]['id']) if x['name'].strip().lower() == fname]
+    if not df: return {'folder': None, 'files': [], 'kind': None, 'missing': [], 'ok': False, 'why': f'{ticker} 未有「{fname}」截圖資料夾'}
+    fs = sorted([x for x in ls(df[0]['id']) if x['name'].lower().endswith('.png')], key=lambda x: x['name'])
+    nums = sorted(int(x['name'][:2]) for x in fs if re.match(r'\d\d_', x['name']))
+    etf = any('Fund_' in x['name'] for x in fs); asia = ticker.isdigit()
+    need = list(range(1, 13)) if etf else list(range(1, 15)) if asia else list(range(1, 18))
+    ok = all(n in nums for n in need) if (asia and not etf) else nums == need
+    return {'folder': df[0]['id'], 'files': fs, 'kind': 'ETF' if etf else 'ASIA' if asia else 'US', 'missing': sorted(set(need) - set(nums)), 'ok': ok,
+            'why': '' if ok else f'{ticker} 截圖未齊：有 {len(fs)} 張，缺 {sorted(set(need) - set(nums))}' + ('（多出／編號唔啱）' if not (set(need) - set(nums)) else '')}
+
+
+def prior_stock(ticker, date):
+    """同股票最近一份（早過 date）報告：{'card':(名,文字),'rep':(名,文字)}；檔名 YYYY-MM-DD_TICKER_類型"""
+    rows = [r for r in get_json('/api/sync')['rows'] if re.match(rf'^\d{{4}}-\d\d-\d\d_{re.escape(ticker)}_', r[2]) and r[2][:10] < date]
+    out = {}
+    for key, pat in (('card', '行動卡'), ('rep', '股票分析終極報告')):
+        rr = sorted([r for r in rows if pat in r[2]], key=lambda r: (r[2][:10], r[3]), reverse=True)
+        if rr:
+            with _open(f'{SITE}/pdf/{rr[0][1]}', timeout=180) as f: out[key] = (rr[0][2], _pdf_text(f.read()))
+    return out
+
+
+def market_report_for(date):
+    """美股個股要承襲當日大盤報告：優先 date 當日（Claude核實版＞Grok核實版＞其他），冇就最近一份。→ (名, 文字, 係咪當日)"""
+    rows = [r for r in get_json('/api/sync')['rows'] if r[0] == 'market' and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] <= date]
+    if not rows: return None, '', False
+    rank = lambda r: (r[2][:10], 2 if 'Claude核實版' in r[2] else 1 if '核實版' in r[2] else 0, r[3])
+    r = sorted(rows, key=rank, reverse=True)[0]
+    with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read()), r[2][:10] == date

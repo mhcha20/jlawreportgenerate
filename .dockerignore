@@ -3,3 +3,7 @@ var
 gen/node_modules
 gen/market/data
 **/__pycache__
+gen/sig/node_modules
+gen/data
+gen/out
+gen/*.html

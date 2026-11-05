@@ -32,6 +32,12 @@ button:disabled { opacity:.45; cursor:default; }
 .acts { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
 .mute { color:var(--mute); font-size:13px; }
 #login { max-width:360px; margin:60px auto; }
+.tabs { display:flex; gap:6px; margin-bottom:12px; } .tabs button { flex:1; background:transparent; color:var(--pri); border:1px solid var(--pri); }
+.tabs button.on { background:var(--pri); color:#fff; }
+.slist { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:6px; margin-top:10px; max-height:340px; overflow:auto; }
+.slist label { display:flex; gap:5px; align-items:center; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:5px 7px; color:var(--ink); margin:0; }
+.slist label.bad { color:var(--mute); } .slist input { width:auto; }
+.srow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; } .srow input[type=search] { flex:1; min-width:140px; }
 </style>
 </head>
 <body>
@@ -46,9 +52,10 @@ button:disabled { opacity:.45; cursor:default; }
 
   <div id="app" hidden>
     <h1>JLaw 報告生成</h1>
-    <div class="sub">由 Google Drive 截圖自動出「美股大盤分析（JW 框架）」報告 · Claude 睇圖分析 · QA 全過先出 PDF</div>
+    <div class="sub">由 Google Drive 截圖自動出大盤同個股報告 · AI 睇圖分析、上網核實 · QA 全過先出 PDF</div>
 
-    <div class="card">
+    <div class="tabs"><button id="tabM" class="on">大盤報告</button><button id="tabS">個股報告</button></div>
+    <div class="card" id="cardM">
       <h2>出大盤報告</h2>
       <div class="row">
         <div><label for="date">美國交易日</label><select id="date"></select></div>
@@ -59,7 +66,22 @@ button:disabled { opacity:.45; cursor:default; }
       <label class="chk"><input type="checkbox" id="up"> 完成後自動上載到報告中心（Drive）</label>
       <button class="big" id="go" disabled>出報告</button>
       <div class="msg" id="goMsg"></div>
-      <div class="mute" style="margin-top:6px">每份約需 10–20 分鐘；Claude API 按用量收費（每份約 US$2–6，完成後會顯示實際用量）。</div>
+      <div class="mute" style="margin-top:6px">每份約需 10–20 分鐘；AI API 按用量收費（每份約 US$2–6，完成後會顯示實際用量）。</div>
+    </div>
+
+    <div class="card" id="cardS" hidden>
+      <h2>出個股報告（行動卡＋本體報告＋核對附錄）</h2>
+      <div class="row">
+        <div><label for="sdate">美國交易日</label><select id="sdate"></select></div>
+        <div style="flex:0"><button class="sec" id="sreload">重新檢查</button></div>
+      </div>
+      <div class="msg" id="sMsg"></div>
+      <div class="srow"><input type="search" id="sfind" placeholder="搵代號，例如 NVDA"><button class="sec" id="sall">揀晒截圖齊嘅</button><button class="sec" id="snone">清除</button></div>
+      <div class="slist" id="slist"></div>
+      <label class="chk"><input type="checkbox" id="sup"> 完成後自動上載到報告中心（Drive）</label>
+      <button class="big" id="sgo" disabled>出報告</button>
+      <div class="msg" id="sgoMsg"></div>
+      <div class="mute" style="margin-top:6px">每隻約 15 分鐘、約 US$2–4；同時做 2 隻，其餘排隊。美股會承襲當日大盤報告，建議先出大盤。</div>
     </div>
 
     <div class="card">
@@ -91,7 +113,7 @@ let shotsOk = false, timer = null;
 async function loadDates() {
   try {
     const d = await api('/api/dates'); const set = new Set(d.dates); if (!set.has(d.default)) d.dates.unshift(d.default);
-    $('date').innerHTML = d.dates.map(x => `<option ${x === d.default ? 'selected' : ''}>${x}</option>`).join('');
+    $('date').innerHTML = $('sdate').innerHTML = d.dates.map(x => `<option ${x === d.default ? 'selected' : ''}>${x}</option>`).join('');
   } catch (e) { $('shotMsg').innerHTML = `<span class="bad">讀唔到 Drive 日期：${esc(e.message)}</span>`; }
   checkShots();
 }
@@ -126,10 +148,11 @@ async function loadJobs() {
   if (!d.jobs.length) { $('jobs').innerHTML = '<div class="mute">未有紀錄</div>'; }
   else $('jobs').innerHTML = d.jobs.map(j => {
     const [t, c] = ST[j.status] || [j.status, ''];
-    return `<div class="job"><div class="hd"><b>${esc(j.date)} 大盤報告</b><span class="st ${c}">${t}</span></div>
+    return `<div class="job"><div class="hd"><b>${esc(j.date)} ${j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : '大盤報告'}</b><span class="st ${c}">${t}</span></div>
       <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'grok' ? ' · 後備 Grok' : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
+      ${j.result ? `<div class="mute">${esc(j.result.rating)} ${esc(j.result.score)}／100 · ${esc(j.result.action)}</div>` : ''}
       <div class="mute">${esc(j.error || j.last)}</div>
-      <div class="acts">${j.pdf ? `<button class="sec" onclick="openPdf('${j.id}')">睇 PDF</button>` : ''}
+      <div class="acts">${(j.pdfs && j.pdfs.length ? j.pdfs : (j.pdf ? [j.pdf] : [])).map((f, i) => `<button class="sec" onclick="openPdf('${j.id}', ${i})">${f.includes('行動卡') ? '行動卡' : f.includes('終極報告') ? '本體報告' : f.includes('核對附錄') ? '核對附錄' : '睇 PDF'}</button>`).join('')}
         ${j.pdf && canUpload && !j.uploaded ? `<button class="sec" onclick="upload('${j.id}', this)">上載 Drive</button>` : ''}
         <button class="sec" onclick="toggleLog('${j.id}')">進度紀錄</button></div>
       <div class="log" id="log-${j.id}" ${openLog.has(j.id) ? '' : 'hidden'}></div></div>`;
@@ -139,9 +162,9 @@ async function loadJobs() {
 }
 async function fillLog(id) { try { const j = await api('/api/jobs/' + id); const el = $('log-' + id); if (el) { el.textContent = j.log.join('\n'); el.scrollTop = el.scrollHeight; } } catch (e) {} }
 function toggleLog(id) { const el = $('log-' + id); el.hidden = !el.hidden; if (el.hidden) openLog.delete(id); else { openLog.add(id); fillLog(id); } }
-async function openPdf(id) {
+async function openPdf(id, i = 0) {
   const w = window.open('', '_blank');
-  try { const r = await api(`/api/jobs/${id}/pdf`); const b = await r.blob(); const u = URL.createObjectURL(b); if (w) w.location = u; else location = u; }
+  try { const r = await api(`/api/jobs/${id}/pdf?i=${i}`); const b = await r.blob(); const u = URL.createObjectURL(b); if (w) w.location = u; else location = u; }
   catch (e) { if (w) w.close(); alert(e.message); }
 }
 async function upload(id, btn) {
@@ -149,6 +172,38 @@ async function upload(id, btn) {
   btn.disabled = true;
   try { await api(`/api/jobs/${id}/upload`, {method: 'POST', body: '{}'}); loadJobs(); } catch (e) { alert('上載失敗：' + e.message); btn.disabled = false; }
 }
+let stocks = [], picked = new Set();
+function tab(which) { $('tabM').classList.toggle('on', which === 'M'); $('tabS').classList.toggle('on', which === 'S'); $('cardM').hidden = which !== 'M'; $('cardS').hidden = which !== 'S'; if (which === 'S' && !stocks.length) loadStocks(); }
+$('tabM').onclick = () => tab('M'); $('tabS').onclick = () => tab('S');
+async function loadStocks() {
+  const d = $('sdate').value; if (!d) return; $('sMsg').textContent = '檢查個股截圖中…'; $('slist').innerHTML = '';
+  try {
+    const r = await api('/api/stocks?date=' + d); stocks = r.rows;
+    const ok = stocks.filter(x => x.status === 'ok').length;
+    $('sMsg').innerHTML = `<span class="${ok ? 'ok' : 'warn'}">${stocks.length} 隻股票，${ok} 隻截圖齊</span>`;
+  } catch (e) { stocks = []; $('sMsg').innerHTML = `<span class="bad">檢查失敗：${esc(e.message)}</span>`; }
+  drawStocks();
+}
+function drawStocks() {
+  const f = $('sfind').value.trim().toUpperCase();
+  $('slist').innerHTML = stocks.filter(x => !f || x.ticker.includes(f)).map(x => {
+    const ok = x.status === 'ok';
+    return `<label class="${ok ? '' : 'bad'}" title="${ok ? '截圖齊' : '截圖未齊' + (x.missing && x.missing.length ? '，缺 ' + x.missing.join('、') : '')}"><input type="checkbox" ${ok ? '' : 'disabled'} ${picked.has(x.ticker) ? 'checked' : ''} onchange="pick('${x.ticker}', this.checked)">${esc(x.ticker)}${ok ? '' : ' ✗'}</label>`;
+  }).join('');
+  $('sgo').disabled = !picked.size; $('sgo').textContent = picked.size ? `出報告（${picked.size} 隻，約 US$${picked.size * 2}–${picked.size * 4}）` : '出報告';
+}
+function pick(t, on) { on ? picked.add(t) : picked.delete(t); drawStocks(); }
+$('sfind').oninput = drawStocks; $('sreload').onclick = loadStocks; $('sdate').onchange = () => { picked.clear(); loadStocks(); };
+$('sall').onclick = () => { stocks.filter(x => x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); };
+$('snone').onclick = () => { picked.clear(); drawStocks(); };
+$('sgo').onclick = async () => {
+  if (picked.size > 5 && !confirm(`出 ${picked.size} 隻股票報告，估計 US$${picked.size * 2}–${picked.size * 4}、要 ${Math.ceil(picked.size / 2) * 15} 分鐘左右。確定？`)) return;
+  $('sgo').disabled = true; $('sgoMsg').textContent = '';
+  try {
+    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({kind: 'stock', date: $('sdate').value, tickers: [...picked], upload: $('sup').checked})});
+    $('sgoMsg').innerHTML = `<span class="ok">已加入 ${r.created} 隻（其餘已經做緊），下面睇進度</span>`; picked.clear(); drawStocks(); loadJobs();
+  } catch (e) { $('sgoMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; $('sgo').disabled = false; }
+};
 function start() { $('login').hidden = true; $('app').hidden = false; loadDates(); loadJobs(); }
 if (PW) api('/api/auth', {method: 'POST', body: '{}'}).then(start).catch(() => {}); else showLogin();
 </script>

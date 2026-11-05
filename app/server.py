@@ -28,33 +28,52 @@ def all_jobs():
     return sorted([j for j in out if j], key=lambda j: j['created'], reverse=True)
 
 
-def new_job(date, by='網頁', upload=False):
+def new_job(date, by='網頁', upload=False, kind='market', ticker=None):
     for j in all_jobs():
-        if j['date'] == date and j['status'] in ('queued', 'running'): return j, False
+        if j['date'] == date and j.get('kind', 'market') == kind and j.get('ticker') == ticker and j['status'] in ('queued', 'running'): return j, False
     jid = dt.datetime.now(HKZ).strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:4]
     os.makedirs(os.path.join(JOBS, jid))
-    j = dict(id=jid, kind='market', date=date, status='queued', created=now(), by=by, auto_upload=upload, log=[], pdf=None, cost=0, uploaded=None)
+    j = dict(id=jid, kind=kind, ticker=ticker, date=date, status='queued', created=now(), by=by, auto_upload=upload, log=[], pdf=None, pdfs=[], cost=0, uploaded=None)
     save(j); Q.put(jid); return j, True
 
 
+MARKET_LOCK = threading.Lock()   # 大盤報告共用 gen/market/data，一次只可以做一份
+
+
 def worker():
-    import agent
+    import agent, stock
     while True:
         jid = Q.get(); j = load(jid)
         if not j: continue
+        if j.get('kind') == 'market' and not MARKET_LOCK.acquire(blocking=False):
+            Q.put(jid); time.sleep(5); continue
+        try: _run(j, agent, stock)
+        finally:
+            if j.get('kind') == 'market': MARKET_LOCK.release()
+
+
+def _run(j, agent, stock):
+    jid = j['id']
+    if True:
         j['status'] = 'running'; j['started'] = now(); save(j)
         def log(msg):
             j['log'].append(f'{dt.datetime.now(HKZ):%H:%M:%S} {msg}'); save(j); print(jid, msg, flush=True)
-        job = agent.Job(jid, j['date'], os.path.join(JOBS, jid), log)
+        folder = os.path.join(JOBS, jid)
+        job = stock.StockJob(jid, j['date'], j['ticker'], folder, log) if j.get('kind') == 'stock' else agent.Job(jid, j['date'], folder, log)
+        def keep():
+            j['pdfs'] = [os.path.basename(x) for x in job.pdfs]; j['pdf'] = j['pdfs'][0] if j['pdfs'] else None; j['pages'] = job.pages
+            if getattr(job, 'info', None): j['result'] = {k: job.info.get(k) for k in ('rating', 'score', 'action', 'tier', 'signals')}
         try:
             job.run()
-            j['status'] = 'done'; j['pdf'] = os.path.basename(job.pdf); j['pages'] = job.pages
+            j['status'] = 'done'; keep()
             if j.get('auto_upload'):
-                try: r = jlaw.upload(job.pdf); j['uploaded'] = now(); log('已上載 Drive：' + json.dumps(r, ensure_ascii=False)[:300])
+                try:
+                    for f in job.pdfs: r = jlaw.upload(f); log('已上載 Drive：' + json.dumps(r, ensure_ascii=False)[:200])
+                    j['uploaded'] = now()
                 except Exception as e: log(f'⚠ 上載失敗：{e}')
         except Exception as e:
             traceback.print_exc(); j['status'] = 'failed'; j['error'] = str(e)[:2000]; log('✗ ' + str(e)[:500])
-            if job.pdf: j['pdf'] = os.path.basename(job.pdf); j['pages'] = job.pages   # 之前有過一版成功
+            if job.pdfs: keep()   # 之前有過一版成功
         j['cost'] = job.cost(); j['usage'] = job.usage; j['engine'] = job.engine; j['builds'] = job.builds; j['finished'] = now(); save(j)
 
 
@@ -105,11 +124,17 @@ class H(BaseHTTPRequestHandler):
             j = load(m.group(1)); return s._send(200, j) if j else s._send(404, {'error': '冇呢個 job'})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/pdf', p)
         if m:
-            j = load(m.group(1))
-            if not j or not j.get('pdf'): return s._send(404, {'error': '未有 PDF'})
-            f = os.path.join(JOBS, j['id'], j['pdf'])
+            j = load(m.group(1)); names = (j or {}).get('pdfs') or ([j['pdf']] if j and j.get('pdf') else [])
+            i = int((q.get('i') or ['0'])[0])
+            if not names or not 0 <= i < len(names): return s._send(404, {'error': '未有 PDF'})
+            f = os.path.join(JOBS, j['id'], names[i])
             from urllib.parse import quote
-            return s._send(200, open(f, 'rb').read(), 'application/pdf', {'Content-Disposition': f"inline; filename*=UTF-8''{quote(j['pdf'])}"})
+            return s._send(200, open(f, 'rb').read(), 'application/pdf', {'Content-Disposition': f"inline; filename*=UTF-8''{quote(names[i])}"})
+        if p == '/api/stocks':
+            d = (q.get('date') or [''])[0]
+            if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
+            try: return s._send(200, {'date': d, 'rows': [{k: r.get(k) for k in ('ticker', 'status', 'have', 'need', 'missing', 'kind')} for r in jlaw.stock_list(d)]})
+            except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/shots':
             d = (q.get('date') or [''])[0]
             try:
@@ -133,6 +158,11 @@ class H(BaseHTTPRequestHandler):
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
             if dt.date.fromisoformat(d).weekday() >= 5: return s._send(400, {'error': f'{d} 係週末，唔係美股交易日'})
             if not (os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('XAI_API_KEY')): return s._send(503, {'error': '伺服器未設定 ANTHROPIC_API_KEY／XAI_API_KEY'})
+            if body.get('kind') == 'stock':
+                ts = [str(x).strip().upper() for x in body.get('tickers') or [] if re.fullmatch(r'[A-Za-z0-9.]{1,10}', str(x).strip())]
+                if not ts: return s._send(400, {'error': '揀最少一隻股票'})
+                made = [new_job(d, upload=bool(body.get('upload')), kind='stock', ticker=t_) for t_ in ts]
+                return s._send(200, {'jobs': [j_['id'] for j_, _ in made], 'created': sum(1 for _, c in made if c)})
             j, created = new_job(d, upload=bool(body.get('upload')))
             return s._send(200, {'job': j['id'], 'created': created})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/upload', p)
@@ -140,7 +170,7 @@ class H(BaseHTTPRequestHandler):
             j = load(m.group(1))
             if not j or not j.get('pdf'): return s._send(404, {'error': '未有 PDF'})
             try:
-                r = jlaw.upload(os.path.join(JOBS, j['id'], j['pdf'])); j['uploaded'] = now(); save(j)
+                r = [jlaw.upload(os.path.join(JOBS, j['id'], f)) for f in (j.get('pdfs') or [j['pdf']])]; j['uploaded'] = now(); save(j)
                 return s._send(200, {'ok': True, 'result': r})
             except Exception as e: return s._send(502, {'error': str(e)})
         s._send(404, {'error': 'not found'})
@@ -150,7 +180,7 @@ def main():
     for j in all_jobs():    # 重新部署：未完成嘅 job 標失敗（唔會自動重跑，避免重複收費）
         if j['status'] in ('queued', 'running'):
             j['status'] = 'failed'; j['error'] = '伺服器重新啟動，job 中斷；請再撳一次'; save(j)
-    threading.Thread(target=worker, daemon=True).start()
+    for _ in range(max(1, int(os.environ.get('WORKERS', '2')))): threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=scheduler, daemon=True).start()
     port = int(os.environ.get('PORT', '8080'))
     print('listening', port, 'data', DATA, flush=True)
