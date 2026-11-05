@@ -280,7 +280,9 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         if not isinstance(code, str) or not code.strip():
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'INVALID_INPUT：inspect_data 要有 code（Python 源碼）'}
         s.inspects = getattr(s, 'inspects', 0) + 1
-        if s.inspects > 25: return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'inspect_data 用咗 25 次，夠資料就交 build_report'}
+        # Grok（store:false）每輪重送成段對話（連截圖），睇資料一次就貴一次：Grok 最多 3 次（INSPECT_MAX_GROK），Claude 有快取，25 次
+        cap = int(os.environ.get('INSPECT_MAX_GROK', '3')) if s.engine == 'grok' else 25
+        if s.inspects > cap: return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': f'inspect_data 已經用咗 {cap} 次（上限），唔好再用：其餘數字喺 work 檔入面用 m 計，直接交 build_report'}
         cwd, pre = s.inspect_prelude()
         fp = os.path.join(s.dir, f'inspect_{s.inspects}.py'); open(fp, 'w', encoding='utf-8').write(pre + '\n' + code)
         s.log(f'睇資料（第 {s.inspects} 次）')

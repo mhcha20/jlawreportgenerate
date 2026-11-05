@@ -26,6 +26,10 @@
 - 已改：朗讀稿等最低字數預先寫入 prompt（之前幾乎每隻第一次都因 scriptfull <1,800 字被攔，每補一次約 US$0.5–0.7）；加 `inspect_data` 工具（之前 Claude 用 build_report 嚟 probe 資料，浪費 build 次數）；prompt 附 `gen/sqa.py`。改完要再量一批睇用量有冇跌。
 - 已改：`gen/lib.py` 量比除數係 0（極少成交股，例 00077）當 NaN／N/A，唔再 division by zero。
 
+## 2026-11-06 Anthropic 額度用完
+- 20:37（UTC）起 Claude 回「credit balance is too low」，自動轉 Grok。要喺 console.anthropic.com Plans & Billing 增值先再用 Claude。
+- Grok 每份去到 US$7–10：Grok（store:false）每輪重送成段對話連截圖，`inspect_data` 用 12 次就貴好多。已改：Grok 最多 3 次（`INSPECT_MAX_GROK`）。之後量一份睇返用量。
+
 ## 要記住嘅坑
 - 部署（push 或者改 Railway Variables）會中斷做緊嘅 job；出緊報告就唔好部署。
 - `gen/market/data` 係共用目錄，大盤 job 一定要一次一份（`MARKET_LOCK`）。
