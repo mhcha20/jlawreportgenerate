@@ -34,8 +34,10 @@ def metrics(t):
     m['vol'] = V[-1]; m['volprev'] = V[-2]
     m['v50'] = sum(V[-51:-1]) / 50; m['v20'] = sum(V[-21:-1]) / 20          # 不含當日（群組口徑）
     m['v50i'] = sum(V[-50:]) / 50; m['v20i'] = sum(V[-20:]) / 20          # 含當日（並列）
-    m['volr50'] = V[-1] / m['v50'] * 100; m['volr20'] = V[-1] / m['v20'] * 100
-    m['volrprev'] = V[-1] / V[-2] * 100
+    # 極少成交股（例 00077：成日成交 0）：除數係 0 就當 NaN，報告顯示 N/A（localize() 會轉），唔好成份報告停
+    _r = lambda a, b: a / b * 100 if b else float('nan')
+    m['volr50'] = _r(V[-1], m['v50']); m['volr20'] = _r(V[-1], m['v20'])
+    m['volrprev'] = _r(V[-1], V[-2])
     for k in (10, 20, 50, 200):
         m[f'ma{k}'] = sma(c, k)
         m[f'ma{k}_5'] = sma(c, k, len(c) - 5)

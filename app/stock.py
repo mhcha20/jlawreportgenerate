@@ -44,6 +44,17 @@ build 會擋：work 檔冇 TODO、今日動作 ≤40 字、朗讀稿字數、行
 === gen/gen2.py（本體報告／核對附錄版面：每個 T 欄位點樣出現）===
 {_read('gen/gen2.py')}
 
+=== gen/sqa.py（qa() 用嘅 chk／chk_true，簽名照呢度，唔使試）===
+{_read('gen/sqa.py')}
+
+=== 格式擋位最低要求（gen/format_stock.py，第一次交就要達到，唔好等 build 攔低先補；每補一次都收費）===
+- 朗讀稿：script3 寫 700–900 字（≥550、≤950）；scriptfull 寫 2,200–3,000 字（≥1,800、≤3,500）。寫完自己用 len() 數一次。
+- 行動卡：S['sub'] ≥35 字；biggest ≥150；cost_tail ≥80，要有「回踩區入場（主目標 x.xxR）」；corr ≥40；foot ≥60。九構面每格理由 ≥30 字。
+- 本體：oneliner ≥120；p1a／p1b／p1c 表現 ≥45、判斷 ≥10；stage_txt ≥120；hhhl ≥80；mom ≥50；vol_rows 6 行每行 ≥40；pattern ≥40；pattern_notes 2 條各 ≥30；
+  sr_rows ≥5 行；pb／bo 各 3 點各 ≥35；canslim 7 行；fund_rows ≥6 行（每行 ≥3 格有內容）；risk 5 項各 ≥15；analyst_line／smart_line／sector_line ≥40；canslim_line ≥30；
+  rrr_note ≥40、f1_note ≥30、f2_interp ≥40、plan_line ≥60、next3_line ≥40、vsprior ≥60、stage_test ≥30、earn_line ≥20；flat ≥50、held ≥30；next3 3 項；keep／noup 各 ≥4 項；q1–q4 各 ≥25；open ≥2 項各 ≥30。
+- 附錄：thr ≥5 行、caliber ≥4 項各 ≥25、conflicts ≥4、sources ≥4 項各 ≥15、smart ≥4 項各 ≥20、corr_html ≥120。頁數：本體 9–10 頁、附錄 ≥3 頁。
+
 === gen/template_work.py（work 檔範本：所有 TODO／0 都要換成當日內容；另加 qa(m, S, T)）===
 {_read('gen/template_work.py')}
 {ref}"""
@@ -124,6 +135,9 @@ class StockJob(agent.Job):
 
 請：①逐張睇晒截圖抄讀數；②用 web_search 核實下次財報日、近期新聞／催化劑、分析員評級（附來源同日期）；③九構面逐格評分寫理由、A／B 路徑價位、減倉／離場、今日動作；④寫完整 work 檔（spec／texts／qa），用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結（評等、分數、今日動作）收尾。"""})
         return s.analyze(stock_system(ref), content)
+
+    def inspect_prelude(s):
+        return (GEN, f"import sys, os; sys.path.insert(0, {GEN!r}); os.chdir({GEN!r}); os.environ['JL_DATE'] = {s.date!r}\nfrom lib import *\nfrom gen import *\nm = metrics({s.ticker!r})")
 
     def build_cmd(s, wp):
         return ([sys.executable, os.path.join(GEN, 'build.py'), s.ticker, s.date, wp, '--out', s.dir],

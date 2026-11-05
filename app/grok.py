@@ -14,6 +14,9 @@ NOTE = ('（今次由 xAI Grok 做。你有 web_search 工具：一定要用嚟�
         '重要業績日程，每項附來源網站同日期；搵唔到先標「未核實」，唔好補造。S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「由 xAI Grok 生成」。）')
 
 TOOLS = [{'type': 'web_search'},
+         {'type': 'function', 'name': 'inspect_data',
+          'description': '睇資料用（唔計 build 次數）：跑一段短 Python，m 已經準備好（大盤＝mlib.Market(DATE)；個股＝lib.metrics(TICKER)），回傳 print() 結果。唔好用 build_report 嚟 probe 資料。',
+          'parameters': {'type': 'object', 'properties': {'code': {'type': 'string', 'description': 'Python 源碼，用 print() 輸出'}}, 'required': ['code']}},
          {'type': 'function', 'name': 'build_report',
           'description': '提交完整 work 檔（Python 源碼，要有 BASIS、spec(m)、texts(m, S)、qa(m, S, T)），網站會跑 build（QA＋格式擋位）並回傳結果。失敗就照錯誤逐項改好，再提交完整 work 檔。',
           'parameters': {'type': 'object', 'properties': {'work_py': {'type': 'string', 'description': '完整 work 檔源碼'}}, 'required': ['work_py']}}]

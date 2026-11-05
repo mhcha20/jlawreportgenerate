@@ -75,6 +75,14 @@ BUILD_TOOL = {
                      'required': ['work_py'], 'additionalProperties': False},
     'eager_input_streaming': True,
 }
+INSPECT_TOOL = {
+    'name': 'inspect_data',
+    'description': '睇資料用（唔計 build 次數）：喺同 build 一樣嘅環境跑一段短 Python，`m` 已經準備好（大盤＝mlib.Market(DATE)；個股＝lib.metrics(TICKER)），'
+                   'print() 嘅結果會回傳（最多 6000 字）。用嚟查行情原始數據、計某個數、試函數點用。唔好用 build_report 嚟 probe／dump 資料。',
+    'input_schema': {'type': 'object', 'properties': {'code': {'type': 'string', 'description': 'Python 源碼，用 print() 輸出'}},
+                     'required': ['code'], 'additionalProperties': False},
+    'eager_input_streaming': True,
+}
 WEB_SEARCH = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 12}
 
 
@@ -214,7 +222,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
 
     def call(s, client, system, msgs):
         s.log('Claude 分析中…')
-        kw = dict(model=MODEL, max_tokens=64000, system=system, messages=msgs, tools=[WEB_SEARCH, BUILD_TOOL],
+        kw = dict(model=MODEL, max_tokens=64000, system=system, messages=msgs, tools=[WEB_SEARCH, BUILD_TOOL, INSPECT_TOOL],
                   thinking={'type': 'adaptive'}, output_config={'effort': EFFORT}, cache_control={'type': 'ephemeral'},
                   betas=['server-side-fallback-2026-07-01'], fallbacks='default')
         for attempt in range(4):
@@ -233,6 +241,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         return resp
 
     def tool(s, b):
+        if b.name == 'inspect_data': return s.inspect(b)
         if b.name != 'build_report' or not isinstance(b.input, dict) or not isinstance(b.input.get('work_py'), str) or 'def spec' not in b.input['work_py']:
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'INVALID_INPUT：要用 build_report，work_py 係完整 Python 源碼（有 spec／texts／qa）'}
         s.builds += 1
@@ -256,6 +265,24 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
             for f in sorted(x for x in os.listdir(s.dir) if x.startswith('pg') and x.endswith('.png')):
                 res.append(img_block(open(os.path.join(s.dir, f), 'rb').read())); os.remove(os.path.join(s.dir, f))
         return {'type': 'tool_result', 'tool_use_id': b.id, 'content': res}
+
+    def inspect(s, b):
+        code = b.input.get('code') if isinstance(b.input, dict) else None
+        if not isinstance(code, str) or not code.strip():
+            return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'INVALID_INPUT：inspect_data 要有 code（Python 源碼）'}
+        s.inspects = getattr(s, 'inspects', 0) + 1
+        if s.inspects > 25: return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'inspect_data 用咗 25 次，夠資料就交 build_report'}
+        cwd, pre = s.inspect_prelude()
+        fp = os.path.join(s.dir, f'inspect_{s.inspects}.py'); open(fp, 'w', encoding='utf-8').write(pre + '\n' + code)
+        s.log(f'睇資料（第 {s.inspects} 次）')
+        try:
+            p = subprocess.run([sys.executable, fp], capture_output=True, text=True, timeout=120, cwd=cwd, env={**os.environ, 'JL_DATE': s.date})
+            out = (p.stdout + ('\n[stderr]\n' + p.stderr if p.stderr.strip() else '')).strip() or '（冇輸出，記得 print）'
+        except subprocess.TimeoutExpired: out = '超時（>120 秒）'
+        return {'type': 'tool_result', 'tool_use_id': b.id, 'content': out[-6000:]}
+
+    def inspect_prelude(s):
+        return (GEN, f"import sys, os; sys.path.insert(0, {os.path.join(GEN, 'market')!r}); os.chdir({GEN!r})\nfrom mlib import *\nm = Market({s.date!r})")
 
     # ---- 大盤報告專用（StockJob 覆寫）
     def build_cmd(s, wp):

@@ -21,6 +21,11 @@
 - [ ] 部署時嘅 502：Railway 切換新 container 嗰幾秒前端會 502；可以喺前端遇到 502 自動等幾秒重試，或者顯示「伺服器重新啟動中」。
 - [ ] 格式擋位門檻（`gen/market/format_check.py`、`gen/format_stock.py`）按實際出咗嘅報告再調；太嚴會令 AI 試好多次（每次都收費）。
 
+## 2026-11-06 第一批 Claude 個股（10 隻亞洲股）觀察
+- Claude 每隻約 US$5.6–6.8（Grok 約 US$2.5＋搜尋費）。
+- 已改：朗讀稿等最低字數預先寫入 prompt（之前幾乎每隻第一次都因 scriptfull <1,800 字被攔，每補一次約 US$0.5–0.7）；加 `inspect_data` 工具（之前 Claude 用 build_report 嚟 probe 資料，浪費 build 次數）；prompt 附 `gen/sqa.py`。改完要再量一批睇用量有冇跌。
+- 已改：`gen/lib.py` 量比除數係 0（極少成交股，例 00077）當 NaN／N/A，唔再 division by zero。
+
 ## 要記住嘅坑
 - 部署（push 或者改 Railway Variables）會中斷做緊嘅 job；出緊報告就唔好部署。
 - `gen/market/data` 係共用目錄，大盤 job 一定要一次一份（`MARKET_LOCK`）。
