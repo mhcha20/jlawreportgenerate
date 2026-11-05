@@ -109,6 +109,9 @@ def data_summary(date):
 class ClaudeRefused(Exception): pass
 
 
+class Cancelled(Exception): pass
+
+
 def with_model(content, model):
     return [dict(b, text=b['text'].replace('{MODEL_ID}', model)) if b['type'] == 'text' else b for b in content]
 
@@ -117,6 +120,11 @@ class Job:
     def __init__(s, jid, date, folder, log):
         s.id, s.date, s.dir, s.log = jid, date, folder, log
         s.usage = dict(inp=0, out=0, cread=0, cwrite=0); s.pdf = None; s.builds = 0; s.pages = None; s.engine = None; s.extra_cost = 0.0; s.jlaw_required = False; s.ref_name = None; s.ref_txt = ''; s.pdfs = []
+
+    cancelled = staticmethod(lambda: False)
+
+    def check_cancel(s):
+        if s.cancelled(): raise Cancelled()
 
     def cost(s): return round(sum(s.usage[k] * PRICE[k] for k in PRICE) / 1e6 + s.extra_cost, 2)
 
@@ -199,6 +207,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         msgs = [{'role': 'user', 'content': with_model(content, MODEL)}]
         client = anthropic.Anthropic(); idle = 0
         for turn in range(MAX_TURNS):
+            s.check_cancel()
             resp = s.call(client, system, msgs)
             msgs.append({'role': 'assistant', 'content': resp.content})
             if resp.stop_reason == 'refusal':

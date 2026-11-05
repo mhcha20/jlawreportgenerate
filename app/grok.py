@@ -87,6 +87,7 @@ def run(job, system, content):
            {'role': 'user', 'content': [_part(b) for b in with_model(content, MODEL)] + [{'type': 'input_text', 'text': NOTE}]}]
     tin = tout = searches = idle = 0
     for turn in range(MAX_TURNS):
+        job.check_cancel()
         job.log('Grok 分析中…')
         body = {'model': MODEL, 'input': inp, 'tools': TOOLS, 'store': False, 'max_output_tokens': 64000}
         if os.environ.get('XAI_REASONING'): body['reasoning'] = {'effort': os.environ['XAI_REASONING']}

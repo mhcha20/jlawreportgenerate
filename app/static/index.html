@@ -120,6 +120,7 @@ button:disabled { opacity:.45; cursor:default; }
     <div class="card">
       <h2>報告紀錄</h2>
       <div class="mute" id="autoNote"></div>
+      <div class="srow" id="qbar" hidden><span class="mute" id="qinfo"></span><button class="sec" id="qcancel">取消全部排緊隊</button></div>
       <div id="jobs"><div class="mute">載入中…</div></div>
     </div>
   </div>
@@ -187,7 +188,7 @@ $('go').onclick = async () => {
   } catch (e) { $('goMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
   $('go').disabled = !shotsOk;
 };
-const ST = {queued: ['排隊中', 'warn'], running: ['進行中', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad']};
+const ST = {queued: ['排隊中', 'warn'], running: ['進行中', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad'], cancelled: ['已取消', '']};
 let canUpload = false, openLog = new Set();
 async function loadJobs() {
   let d; try { d = await api('/api/jobs'); } catch (e) { return; }
@@ -202,12 +203,23 @@ async function loadJobs() {
       <div class="mute">${esc(j.error || j.last)}</div>
       <div class="acts">${(j.pdfs && j.pdfs.length ? j.pdfs : (j.pdf ? [j.pdf] : [])).map((f, i) => `<button class="sec" onclick="openPdf('${j.id}', ${i})">${f.includes('行動卡') ? '行動卡' : f.includes('終極報告') ? '本體報告' : f.includes('核對附錄') ? '核對附錄' : '睇 PDF'}</button>`).join('')}
         ${j.pdf && canUpload && !j.uploaded ? `<button class="sec" onclick="upload('${j.id}', this)">上載 Drive</button>` : ''}
-        <button class="sec" onclick="toggleLog('${j.id}')">進度紀錄</button></div>
+        <button class="sec" onclick="toggleLog('${j.id}')">進度紀錄</button>
+        ${j.status === 'queued' || j.status === 'running' ? `<button class="sec" onclick="cancelJob('${j.id}', this)">${j.status === 'queued' ? '取消' : '停止'}</button>` : ''}</div>
       <div class="log" id="log-${j.id}" ${openLog.has(j.id) ? '' : 'hidden'}></div></div>`;
   }).join('');
   for (const id of openLog) fillLog(id);
+  const nq = d.n_queued ?? d.jobs.filter(j => j.status === 'queued').length, nr = d.n_running ?? d.jobs.filter(j => j.status === 'running').length;
+  $('qbar').hidden = !nq; $('qinfo').textContent = `做緊 ${nr} 份、排緊隊 ${nq} 份`;
   clearTimeout(timer); timer = setTimeout(loadJobs, d.jobs.some(j => j.status === 'running' || j.status === 'queued') ? 4000 : 30000);
 }
+async function cancelJob(id, btn) {
+  if (!confirm('取消呢份報告？做緊嘅會喺下一步停（已經用咗嘅 API 費用唔會退）。')) return;
+  btn.disabled = true; try { await api(`/api/jobs/${id}/cancel`, {method: 'POST', body: '{}'}); loadJobs(); } catch (e) { alert(e.message); btn.disabled = false; }
+}
+$('qcancel').onclick = async () => {
+  if (!confirm('取消全部排緊隊嘅報告？做緊嗰啲會照做完（要停就逐個撳「停止」）。')) return;
+  try { const r = await api('/api/cancel_queued', {method: 'POST', body: '{}'}); alert(`取消咗 ${r.cancelled} 份`); loadJobs(); } catch (e) { alert(e.message); }
+};
 async function fillLog(id) { try { const j = await api('/api/jobs/' + id); const el = $('log-' + id); if (el) { el.textContent = j.log.join('\n'); el.scrollTop = el.scrollHeight; } } catch (e) {} }
 function toggleLog(id) { const el = $('log-' + id); el.hidden = !el.hidden; if (el.hidden) openLog.delete(id); else { openLog.add(id); fillLog(id); } }
 // 喺同一版睇 PDF：伺服器將每頁轉做圖片（手機睇得順），另有下載／新分頁

@@ -49,11 +49,18 @@ def new_job(date, by='網頁', upload=False, kind='market', ticker=None):
 MARKET_LOCK = threading.Lock()   # 大盤報告共用 gen/market/data，一次只可以做一份
 
 
+CANCEL = set()   # 用戶撳咗取消嘅 job id：排緊隊就唔做；做緊就喺下一輪 AI 回覆之前停（agent.Job.check_cancel）
+
+
 def worker():
     import agent, stock
     while True:
         jid = Q.get(); j = load(jid)
         if not j: continue
+        if jid in CANCEL or j.get('status') == 'cancelled':
+            CANCEL.discard(jid)
+            if j.get('status') == 'queued': j['status'] = 'cancelled'; j['finished'] = now(); save(j)
+            continue
         if j.get('kind') == 'market' and not MARKET_LOCK.acquire(blocking=False):
             Q.put(jid); time.sleep(5); continue
         try: _run(j, agent, stock)
@@ -69,6 +76,7 @@ def _run(j, agent, stock):
             j['log'].append(f'{dt.datetime.now(HKZ):%H:%M:%S} {msg}'); save(j); print(jid, msg, flush=True)
         folder = os.path.join(JOBS, jid)
         job = stock.StockJob(jid, j['date'], j['ticker'], folder, log) if j.get('kind') == 'stock' else agent.Job(jid, j['date'], folder, log)
+        job.cancelled = lambda: jid in CANCEL
         def keep():
             j['pdfs'] = [os.path.basename(x) for x in job.pdfs]; j['pdf'] = j['pdfs'][0] if j['pdfs'] else None; j['pages'] = job.pages
             if getattr(job, 'info', None): j['result'] = {k: job.info.get(k) for k in ('rating', 'score', 'action', 'tier', 'signals')}
@@ -80,6 +88,8 @@ def _run(j, agent, stock):
                     for f in job.pdfs: r = jlaw.upload(f); log('已上載 Drive：' + json.dumps(r, ensure_ascii=False)[:200])
                     j['uploaded'] = now()
                 except Exception as e: log(f'⚠ 上載失敗：{e}')
+        except agent.Cancelled:
+            CANCEL.discard(jid); j['status'] = 'cancelled'; j['error'] = '已取消'; log('■ 用戶取消')
         except Exception as e:
             traceback.print_exc(); j['status'] = 'failed'; j['error'] = str(e)[:2000]; log('✗ ' + str(e)[:500])
             if job.pdfs: keep()   # 之前有過一版成功
@@ -166,7 +176,9 @@ class H(BaseHTTPRequestHandler):
         if not (PW or auth.google_on()): return s._send(503, {'error': '伺服器未設定登入方式（GOOGLE_CLIENT_ID 或 GEN_PASSWORD）'})
         if not s._authed(): return s._send(401, {'error': '未登入'})
         if p == '/api/jobs':
-            return s._send(200, {'jobs': [{k: v for k, v in j.items() if k != 'log'} | {'last': (j['log'] or [''])[-1]} for j in all_jobs()[:30]],
+            aj = all_jobs()
+            return s._send(200, {'jobs': [{k: v for k, v in j.items() if k != 'log'} | {'last': (j['log'] or [''])[-1]} for j in aj[:30]],
+                                 'n_queued': sum(1 for j in aj if j['status'] == 'queued'), 'n_running': sum(1 for j in aj if j['status'] == 'running'),
                                  'auto': os.environ.get('AUTO_MARKET') == '1', 'can_upload': bool(os.environ.get('JLAW_ADMIN_PASSWORD'))})
         m = re.fullmatch(r'/api/jobs/([\w-]+)', p)
         if m:
@@ -258,6 +270,19 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'jobs': [j_['id'] for j_, _ in made], 'created': sum(1 for _, c in made if c)})
             j, created = new_job(d, upload=bool(body.get('upload')))
             return s._send(200, {'job': j['id'], 'created': created})
+        m = re.fullmatch(r'/api/jobs/([\w-]+)/cancel', p)
+        if m:
+            j = load(m.group(1))
+            if not j or j['status'] not in ('queued', 'running'): return s._send(400, {'error': '呢個 job 唔係排緊隊／做緊'})
+            CANCEL.add(j['id'])
+            if j['status'] == 'queued': j['status'] = 'cancelled'; j['error'] = '已取消'; j['finished'] = now(); save(j)
+            return s._send(200, {'ok': True, 'status': j['status']})
+        if p == '/api/cancel_queued':   # 一次過取消全部排緊隊嘅（做緊嗰啲唔郁）
+            n = 0
+            for j in all_jobs():
+                if j['status'] == 'queued':
+                    CANCEL.add(j['id']); j['status'] = 'cancelled'; j['error'] = '已取消'; j['finished'] = now(); save(j); n += 1
+            return s._send(200, {'cancelled': n})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/upload', p)
         if m:
             j = load(m.group(1))
