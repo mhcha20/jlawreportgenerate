@@ -177,7 +177,7 @@ class H(BaseHTTPRequestHandler):
         if not s._authed(): return s._send(401, {'error': '未登入'})
         if p == '/api/jobs':
             aj = all_jobs()
-            return s._send(200, {'jobs': [{k: v for k, v in j.items() if k != 'log'} | {'last': (j['log'] or [''])[-1]} for j in aj[:30]],
+            return s._send(200, {'jobs': [{k: v for k, v in j.items() if k != 'log'} | {'last': (j['log'] or [''])[-1]} for j in aj[:200]],
                                  'n_queued': sum(1 for j in aj if j['status'] == 'queued'), 'n_running': sum(1 for j in aj if j['status'] == 'running'),
                                  'auto': os.environ.get('AUTO_MARKET') == '1', 'can_upload': bool(os.environ.get('JLAW_ADMIN_PASSWORD'))})
         m = re.fullmatch(r'/api/jobs/([\w-]+)', p)
@@ -270,6 +270,13 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'jobs': [j_['id'] for j_, _ in made], 'created': sum(1 for _, c in made if c)})
             j, created = new_job(d, upload=bool(body.get('upload')))
             return s._send(200, {'job': j['id'], 'created': created})
+        m = re.fullmatch(r'/api/jobs/([\w-]+)/retry', p)   # 重做：同一 kind／日期／代號開一個新 job（舊紀錄保留）
+        if m:
+            j = load(m.group(1))
+            if not j: return s._send(404, {'error': '冇呢個 job'})
+            if j['status'] in ('queued', 'running'): return s._send(400, {'error': '仲做緊／排緊隊'})
+            nj, created = new_job(j['date'], upload=bool(body.get('upload', j.get('auto_upload'))), kind=j.get('kind', 'market'), ticker=j.get('ticker'))
+            return s._send(200, {'job': nj['id'], 'created': created})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/cancel', p)
         if m:
             j = load(m.group(1))

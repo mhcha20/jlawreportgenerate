@@ -31,6 +31,9 @@ button:disabled { opacity:.45; cursor:default; }
 .log { font:12px/1.5 ui-monospace, Menlo, monospace; background:var(--bg); border-radius:8px; padding:8px; margin-top:8px; max-height:260px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
 .acts { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
 .mute { color:var(--mute); font-size:13px; }
+[hidden] { display:none !important; }
+html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100%; } .job .mute, .job b { overflow-wrap:anywhere; word-break:break-word; }
+.jfilter { margin:8px 0 4px; }
 #login { max-width:360px; margin:60px auto; }
 .gbtn { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:13px; border:1px solid var(--line); border-radius:8px; background:#fff; color:#1f1f1f; font-weight:600; text-decoration:none; margin:6px 0 12px; }
 .who { font-size:12px; color:var(--mute); margin-bottom:10px; } .who a { color:var(--pri); }
@@ -121,6 +124,8 @@ button:disabled { opacity:.45; cursor:default; }
       <h2>報告紀錄</h2>
       <div class="mute" id="autoNote"></div>
       <div class="srow" id="qbar" hidden><span class="mute" id="qinfo"></span><button class="sec" id="qcancel">取消全部排緊隊</button></div>
+      <div class="chips jfilter" id="jfilter"></div>
+      <div class="srow" id="rbar" hidden><button class="sec" id="rall">重做顯示中全部失敗／已取消</button></div>
       <div id="jobs"><div class="mute">載入中…</div></div>
     </div>
   </div>
@@ -194,17 +199,25 @@ async function loadJobs() {
   let d; try { d = await api('/api/jobs'); } catch (e) { return; }
   canUpload = d.can_upload;
   $('autoNote').textContent = d.auto ? '每日定時排程：已開（香港朝早截圖齊就自動出）' : '每日定時排程：未開';
-  if (!d.jobs.length) { $('jobs').innerHTML = '<div class="mute">未有紀錄</div>'; }
-  else $('jobs').innerHTML = d.jobs.map(j => {
+  allJobs = d.jobs;
+  const JF = [['all', '全部'], ['done', '完成'], ['failed', '失敗／取消'], ['active', '做緊／排隊']];
+  const inF = (j, k) => k === 'all' || (k === 'done' ? j.status === 'done' : k === 'failed' ? (j.status === 'failed' || j.status === 'cancelled') : (j.status === 'running' || j.status === 'queued'));
+  chipRow($('jfilter'), JF.map(([k, l]) => [k, `${l} ${d.jobs.filter(j => inF(j, k)).length}`]), jFilter, k => { jFilter = k; try { localStorage.setItem('jfilter', k); } catch (e) {} loadJobs(); });
+  const list = d.jobs.filter(j => inF(j, jFilter)).slice(0, 60);
+  shownFailed = list.filter(j => j.status === 'failed' || j.status === 'cancelled');
+  $('rbar').hidden = !shownFailed.length; $('rall').textContent = `重做顯示中全部失敗／已取消（${shownFailed.length}）`;
+  if (!list.length) { $('jobs').innerHTML = '<div class="mute">冇符合嘅紀錄</div>'; }
+  else $('jobs').innerHTML = list.map(j => {
     const [t, c] = ST[j.status] || [j.status, ''];
     return `<div class="job"><div class="hd"><b>${esc(j.date)} ${j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : '大盤報告'}</b><span class="st ${c}">${t}</span></div>
       <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'grok' ? ' · 後備 Grok' : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
       ${j.result ? `<div class="mute">${esc(j.result.rating)} ${esc(j.result.score)}／100 · ${esc(j.result.action)}</div>` : ''}
-      <div class="mute">${esc(j.error || j.last)}</div>
+      <div class="mute">${esc(String(j.error || j.last || '').replace(/[*#`]/g, '').slice(0, 220))}</div>
       <div class="acts">${(j.pdfs && j.pdfs.length ? j.pdfs : (j.pdf ? [j.pdf] : [])).map((f, i) => `<button class="sec" onclick="openPdf('${j.id}', ${i})">${f.includes('行動卡') ? '行動卡' : f.includes('終極報告') ? '本體報告' : f.includes('核對附錄') ? '核對附錄' : '睇 PDF'}</button>`).join('')}
         ${j.pdf && canUpload && !j.uploaded ? `<button class="sec" onclick="upload('${j.id}', this)">上載 Drive</button>` : ''}
         <button class="sec" onclick="toggleLog('${j.id}')">進度紀錄</button>
-        ${j.status === 'queued' || j.status === 'running' ? `<button class="sec" onclick="cancelJob('${j.id}', this)">${j.status === 'queued' ? '取消' : '停止'}</button>` : ''}</div>
+        ${j.status === 'queued' || j.status === 'running' ? `<button class="sec" onclick="cancelJob('${j.id}', this)">${j.status === 'queued' ? '取消' : '停止'}</button>` : ''}
+        ${j.status === 'failed' || j.status === 'cancelled' ? `<button class="sec" onclick="retryJob('${j.id}', this)">重做</button>` : ''}</div>
       <div class="log" id="log-${j.id}" ${openLog.has(j.id) ? '' : 'hidden'}></div></div>`;
   }).join('');
   for (const id of openLog) fillLog(id);
@@ -212,6 +225,23 @@ async function loadJobs() {
   $('qbar').hidden = !nq; $('qinfo').textContent = `做緊 ${nr} 份、排緊隊 ${nq} 份`;
   clearTimeout(timer); timer = setTimeout(loadJobs, d.jobs.some(j => j.status === 'running' || j.status === 'queued') ? 4000 : 30000);
 }
+let allJobs = [], shownFailed = [], jFilter = 'all';
+try { jFilter = localStorage.getItem('jfilter') || 'all'; } catch (e) {}
+const jobName = j => `${j.date} ${j.kind === 'stock' ? j.ticker : '大盤'}`;
+async function retryJob(id, btn) {
+  const j = allJobs.find(x => x.id === id);
+  if (!confirm(`重做 ${j ? jobName(j) : ''} 報告？會再收一次費（每份約 US$2–8）。`)) return;
+  btn.disabled = true; try { await api(`/api/jobs/${id}/retry`, {method: 'POST', body: '{}'}); loadJobs(); } catch (e) { alert(e.message); btn.disabled = false; }
+}
+$('rall').onclick = async () => {
+  const seen = new Set(), todo = shownFailed.filter(j => { const k = jobName(j); if (seen.has(k)) return false; seen.add(k); return true; });
+  const done = new Set(allJobs.filter(j => ['done', 'queued', 'running'].includes(j.status)).map(jobName));
+  const go = todo.filter(j => !done.has(jobName(j)));
+  if (!go.length) { alert('顯示中嘅失敗報告，之後都已經重做過或者做緊'); return; }
+  if (!confirm(`重做 ${go.length} 份報告？（同一份已經有完成／做緊版本嘅會略過）\n${go.map(jobName).join('、')}\n\n估計 US$${go.length * 2}–${go.length * 8}。`)) return;
+  let n = 0; for (const j of go) { try { await api(`/api/jobs/${j.id}/retry`, {method: 'POST', body: '{}'}); n++; } catch (e) {} }
+  alert(`已重新排咗 ${n} 份`); loadJobs();
+};
 async function cancelJob(id, btn) {
   if (!confirm('取消呢份報告？做緊嘅會喺下一步停（已經用咗嘅 API 費用唔會退）。')) return;
   btn.disabled = true; try { await api(`/api/jobs/${id}/cancel`, {method: 'POST', body: '{}'}); loadJobs(); } catch (e) { alert(e.message); btn.disabled = false; }
