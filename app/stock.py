@@ -113,7 +113,7 @@ class StockJob(agent.Job):
             content.append({'type': 'text', 'text': f'截圖 {f["name"]}（Drive 建立時間 UTC {f.get("createdTime", "?")}）' + ('（已裁切／拼接）' if use != fn else '')})
             content.append(img_block(open(use, 'rb').read()))
         ptxt = ''.join(f'\n--- {v[0]} ---\n{v[1][:30000]}' for v in prior.values())
-        content.append({'type': 'text', 'text': f"""TICKER = {t}；分析交易日 DATE = {date}；版面 {sh['kind']}（{len(sh['files'])} 張）；香港分析時間 {hk:%Y-%m-%d %H:%M}；模型識別碼 {{MODEL_ID}}。
+        content.append({'type': 'text', 'text': f"""TICKER = {t}；分析交易日 DATE = {date}；版面 {sh['kind']}（{len(sh['files'])} 張）{'：外國股／ADR，冇美國內部人申報（第 15 張內部人' + ('有提供' if any(f['name'].startswith('15_') for f in sh['files']) else '冇') + '），機構支持構面嘅內部人一項標「缺項（ADR 冇內部人申報）」，唔當負面證據、覆蓋率如實列' if sh['kind'] == 'ADR' else ''}；香港分析時間 {hk:%Y-%m-%d %H:%M}；模型識別碼 {{MODEL_ID}}。
 行情已準備好（data/{t}_{date}.json），以下係 metrics(t) 重算摘要（work 檔用 m 取值，唔好照抄寫死）：
 {json.dumps(summary, ensure_ascii=False)}
 

@@ -123,16 +123,22 @@ def last_us_trading_day(now=None):
 
 # ---------------------------------------------------------------- 個股
 SROOT = '1xkPBlGhK0SEn2dGIzAINQNIFL33m0hG_'   # 個股截圖根資料夾：<代號>/<DD mon YYYY>/NN_*.png
+# 外國股／ADR（字母代號但唔係美國公司）：冇美國內部人申報 → 第 15 張（內部人）可缺（用戶 2026-11-05 指出）
+ADR = {x.strip().upper() for x in os.environ.get('ADR_TICKERS', 'SCHN,NESN,MC,ATD').split(',') if x.strip()}
 
 
 def stock_list(date):
     """jlaw-report 截圖檢查：當日每隻股票截圖齊唔齊 → [{ticker,status,…}]"""
-    return get_json(f'/api/shots?date={date}')['stocks']['rows']
+    rows = get_json(f'/api/shots?date={date}')['stocks']['rows']
+    for r in rows:   # ADR：jlaw-report 截圖檢查當美股要 01–17，呢度只缺 15 都當齊
+        if r.get('ticker') in ADR and r.get('status') == 'incomplete' and set(r.get('missing') or []) <= {15} and not r.get('extra'):
+            r['status'] = 'ok'; r['kind'] = 'ADR'
+    return rows
 
 
 def stock_shots(ticker, date):
     """個股截圖：{'folder','files':[{id,name,createdTime}],'kind':'US|ETF|ASIA','missing':[編號],'ok':bool}。規則同 Jlaw-report drive.py：
-    美股要啱啱 01–17；檔名有 Fund_ 當 ETF，要啱啱 01–12；全數字代號當亞洲，01–14 齊就得（15–17 可缺）。"""
+    美股要啱啱 01–17（ADR 清單內嘅外國股 15 內部人可缺）；檔名有 Fund_ 當 ETF，要啱啱 01–12；全數字代號當亞洲，01–14 齊就得（15–17 可缺）。"""
     tf = [x for x in ls(SROOT) if x['name'].strip() == ticker]
     if not tf: return {'folder': None, 'files': [], 'kind': None, 'missing': [], 'ok': False, 'why': f'Drive 冇 {ticker} 截圖資料夾'}
     fname = folder_name(date)
@@ -140,10 +146,10 @@ def stock_shots(ticker, date):
     if not df: return {'folder': None, 'files': [], 'kind': None, 'missing': [], 'ok': False, 'why': f'{ticker} 未有「{fname}」截圖資料夾'}
     fs = sorted([x for x in ls(df[0]['id']) if x['name'].lower().endswith('.png')], key=lambda x: x['name'])
     nums = sorted(int(x['name'][:2]) for x in fs if re.match(r'\d\d_', x['name']))
-    etf = any('Fund_' in x['name'] for x in fs); asia = ticker.isdigit()
-    need = list(range(1, 13)) if etf else list(range(1, 15)) if asia else list(range(1, 18))
-    ok = all(n in nums for n in need) if (asia and not etf) else nums == need
-    return {'folder': df[0]['id'], 'files': fs, 'kind': 'ETF' if etf else 'ASIA' if asia else 'US', 'missing': sorted(set(need) - set(nums)), 'ok': ok,
+    etf = any('Fund_' in x['name'] for x in fs); asia = ticker.isdigit(); adr = ticker in ADR and not etf and not asia
+    need = list(range(1, 13)) if etf else list(range(1, 15)) if asia else [n for n in range(1, 18) if n != 15] if adr else list(range(1, 18))
+    ok = all(n in nums for n in need) and all(n <= 17 for n in nums) if (adr or (asia and not etf)) else nums == need
+    return {'folder': df[0]['id'], 'files': fs, 'kind': 'ETF' if etf else 'ASIA' if asia else 'ADR' if adr else 'US', 'missing': sorted(set(need) - set(nums)), 'ok': ok,
             'why': '' if ok else f'{ticker} 截圖未齊：有 {len(fs)} 張，缺 {sorted(set(need) - set(nums))}' + ('（多出／編號唔啱）' if not (set(need) - set(nums)) else '')}
 
 
