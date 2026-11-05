@@ -171,7 +171,9 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing']})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/dates':
-            try: return s._send(200, {'dates': [d for d, _ in jlaw.date_folders()[:30]], 'default': jlaw.last_us_trading_day()})
+            try:
+                md = [d for d, _ in jlaw.date_folders()[:30]]; sd, sdef = jlaw.stock_dates(md)
+                return s._send(200, {'dates': md, 'default': jlaw.last_us_trading_day(), 'stock_dates': sd, 'stock_default': sdef})
             except Exception as e: return s._send(502, {'error': str(e)})
         s._send(404, {'error': 'not found'})
 

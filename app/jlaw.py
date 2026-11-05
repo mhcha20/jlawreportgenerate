@@ -112,6 +112,20 @@ def upload(pdf_path):
         return json.load(r)
 
 
+def stock_dates(market_dates, n=10):
+    """個股分頁日期：美股大盤日期資料夾＋最近 n 個工作日（亞洲股收市先上載截圖，美股未有大盤資料夾都要揀得到）。
+    默認＝最近一個港股已收市嘅工作日（香港 16:30 前用上一個工作日）。"""
+    from zoneinfo import ZoneInfo
+    hk = dt.datetime.now(ZoneInfo('Asia/Hong_Kong'))
+    d, wk = hk.date(), []
+    while len(wk) < n:
+        if d.weekday() < 5: wk.append(d.isoformat())
+        d -= dt.timedelta(days=1)
+    dflt = hk.date() if (hk.hour, hk.minute) >= (16, 30) else hk.date() - dt.timedelta(days=1)
+    while dflt.weekday() >= 5: dflt -= dt.timedelta(days=1)
+    return sorted(set(wk) | set(market_dates), reverse=True)[:30], dflt.isoformat()
+
+
 def last_us_trading_day(now=None):
     """香港而家計，最近一個已收市嘅美股交易日（唔計美國假期；假期冇截圖資料夾，排程會自動跳過）"""
     from zoneinfo import ZoneInfo

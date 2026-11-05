@@ -87,7 +87,7 @@ button:disabled { opacity:.45; cursor:default; }
     <div class="card" id="cardS" hidden>
       <h2>出個股報告（行動卡＋本體報告＋核對附錄）</h2>
       <div class="row">
-        <div><label for="sdate">美國交易日</label><select id="sdate"></select></div>
+        <div><label for="sdate">交易日（亞洲股收市後就揀得）</label><select id="sdate"></select></div>
         <div style="flex:0"><button class="sec" id="sreload">重新檢查</button></div>
       </div>
       <div class="msg" id="sMsg"></div>
@@ -136,7 +136,9 @@ let shotsOk = false, timer = null;
 async function loadDates() {
   try {
     const d = await api('/api/dates'); const set = new Set(d.dates); if (!set.has(d.default)) d.dates.unshift(d.default);
-    $('date').innerHTML = $('sdate').innerHTML = d.dates.map(x => `<option ${x === d.default ? 'selected' : ''}>${x}</option>`).join('');
+    $('date').innerHTML = d.dates.map(x => `<option ${x === d.default ? 'selected' : ''}>${x}</option>`).join('');
+    const sd = d.stock_dates || d.dates, sdef = d.stock_default || d.default;
+    $('sdate').innerHTML = sd.map(x => `<option value="${x}" ${x === sdef ? 'selected' : ''}>${x}${d.dates.includes(x) ? '' : '（未有美股）'}</option>`).join('');
   } catch (e) { $('shotMsg').innerHTML = `<span class="bad">讀唔到 Drive 日期：${esc(e.message)}</span>`; }
   checkShots();
 }
@@ -229,11 +231,12 @@ async function loadStocks() {
   try {
     const r = await api('/api/stocks?date=' + d); stocks = r.rows;
     const ok = stocks.filter(x => x.status === 'ok').length;
-    $('sMsg').innerHTML = `<span class="${ok ? 'ok' : 'warn'}">${stocks.length} 隻股票，${ok} 隻截圖齊</span>`;
+    const none = stocks.filter(x => x.status === 'none').length;
+    $('sMsg').innerHTML = `<span class="${ok ? 'ok' : 'warn'}">${stocks.length} 隻股票，${ok} 隻截圖齊${none ? `，${none} 隻呢日未有截圖` : ''}</span>`;
   } catch (e) { stocks = []; $('sMsg').innerHTML = `<span class="bad">檢查失敗：${esc(e.message)}</span>`; }
   drawStocks();
 }
-const MKT = [['all', '全部'], ['us', '美股'], ['etf', 'ETF'], ['asia', '亞洲'], ['foreign', '外國股'], ['bad', '截圖未齊']];
+const MKT = [['all', '全部'], ['ok', '截圖齊'], ['us', '美股'], ['etf', 'ETF'], ['asia', '亞洲'], ['foreign', '外國股'], ['bad', '截圖未齊／未有']];
 let sMkt = 'all', sTheme = 'all';
 try { const v = JSON.parse(localStorage.getItem('sview') || '{}'); if (v.sort) $('ssort').value = v.sort; if (v.mkt) sMkt = v.mkt; } catch (e) {}
 const mktOf = x => x.layout === 'etf' ? 'etf' : x.layout === 'asia' ? 'asia' : x.layout === 'foreign' ? 'foreign' : 'us';
@@ -242,7 +245,7 @@ const codeCmp = (a, b) => { const na = /^\d+$/.test(a), nb = /^\d+$/.test(b); re
 function shown() {
   const f = $('sfind').value.trim().toUpperCase();
   return stocks.filter(x => (!f || x.ticker.includes(f) || (x.name || '').toUpperCase().includes(f))
-    && (sMkt === 'all' || (sMkt === 'bad' ? x.status !== 'ok' : mktOf(x) === sMkt))
+    && (sMkt === 'all' || (sMkt === 'bad' ? x.status !== 'ok' : sMkt === 'ok' ? x.status === 'ok' : mktOf(x) === sMkt))
     && (sTheme === 'all' || (x.theme || '未分類') === sTheme)).sort((a, b) => codeCmp(a.ticker, b.ticker));
 }
 function chipRow(el, items, cur, set) {
@@ -251,12 +254,13 @@ function chipRow(el, items, cur, set) {
 }
 function box(x) {
   const ok = x.status === 'ok';
-  const tip = (x.name ? x.name + '｜' : '') + (ok ? '截圖齊' : '截圖未齊' + (x.missing && x.missing.length ? '，缺 ' + x.missing.join('、') : ''));
-  return `<label class="${ok ? '' : 'bad'}" title="${esc(tip)}"><input type="checkbox" ${ok ? '' : 'disabled'} ${picked.has(x.ticker) ? 'checked' : ''} onchange="pick('${x.ticker}', this.checked)">${esc(x.ticker)}${ok ? '' : ' ✗'}${mktOf(x) === 'etf' ? '<small>ETF</small>' : ''}</label>`;
+  const none = x.status === 'none';
+  const tip = (x.name ? x.name + '｜' : '') + (ok ? '截圖齊' : none ? '呢日未有截圖' : '截圖未齊' + (x.missing && x.missing.length ? '，缺 ' + x.missing.join('、') : ''));
+  return `<label class="${ok ? '' : 'bad'}" title="${esc(tip)}"><input type="checkbox" ${ok ? '' : 'disabled'} ${picked.has(x.ticker) ? 'checked' : ''} onchange="pick('${x.ticker}', this.checked)">${esc(x.ticker)}${ok ? '' : none ? ' –' : ' ✗'}${mktOf(x) === 'etf' ? '<small>ETF</small>' : ''}</label>`;
 }
 function drawStocks() {
   try { localStorage.setItem('sview', JSON.stringify({sort: $('ssort').value, mkt: sMkt})); } catch (e) {}
-  const cnt = k => stocks.filter(x => k === 'all' || (k === 'bad' ? x.status !== 'ok' : mktOf(x) === k)).length;
+  const cnt = k => stocks.filter(x => k === 'all' || (k === 'bad' ? x.status !== 'ok' : k === 'ok' ? x.status === 'ok' : mktOf(x) === k)).length;
   chipRow($('smkt'), MKT.filter(([k]) => k === 'all' || cnt(k)).map(([k, l]) => [k, `${l} ${cnt(k)}`]), sMkt, k => sMkt = k);
   const themes = [...new Set(stocks.map(x => x.theme || '未分類'))].sort((a, b) => (a === '未分類') - (b === '未分類') || a.localeCompare(b, 'zh-Hant'));
   $('stheme').hidden = themes.length < 2;
