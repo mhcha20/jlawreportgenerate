@@ -26,21 +26,51 @@ def _part(b):
     return {'type': 'input_image', 'image_url': f'data:{src["media_type"]};base64,{src["data"]}', 'detail': 'high'}
 
 
+IDLE = int(os.environ.get('XAI_IDLE_TIMEOUT', '300'))   # 串流超過呢個秒數冇任何資料就當斷線重試
+
+
+def _stream(req, log):
+    """讀 Responses API 串流（SSE），回傳最後嘅 response 物件；途中記低進度（上網搜尋、寫 work 檔）"""
+    final = None; arg_chars = 0; last_note = time.time()
+    with urllib.request.urlopen(req, timeout=IDLE) as r:
+        for raw in r:
+            line = raw.decode('utf-8', 'replace').strip()
+            if not line.startswith('data:'): continue
+            data = line[5:].strip()
+            if data == '[DONE]': break
+            try: ev = json.loads(data)
+            except json.JSONDecodeError: continue
+            t = ev.get('type', '')
+            if t in ('response.completed', 'response.incomplete', 'response.failed'): final = ev.get('response'); continue
+            if t == 'error': raise RuntimeError(f'Grok 串流出錯：{json.dumps(ev, ensure_ascii=False)[:500]}')
+            if t == 'response.output_item.added':
+                it = (ev.get('item') or {}).get('type')
+                if it == 'web_search_call': log('Grok 上網搜尋中…')
+                elif it == 'function_call': log('Grok 開始寫 work 檔…')
+            elif t == 'response.function_call_arguments.delta':
+                arg_chars += len(ev.get('delta') or '')
+                if time.time() - last_note > 60: log(f'Grok 寫緊 work 檔（{arg_chars:,} 字）…'); last_note = time.time()
+    if not final: raise RuntimeError('Grok 串流中斷，冇收到完整回覆')
+    if final.get('status') == 'failed': raise RuntimeError(f'Grok 回覆失敗：{json.dumps(final.get("error"), ensure_ascii=False)[:500]}')
+    return final
+
+
 def _post(body, log):
     key = os.environ['XAI_API_KEY']
-    data = json.dumps(body, ensure_ascii=False).encode()
+    data = json.dumps(dict(body, stream=True), ensure_ascii=False).encode()
     for attempt in range(4):
         req = urllib.request.Request(BASE + '/responses', data=data, method='POST',
-                                     headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'})
+                                     headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json', 'Accept': 'text/event-stream'})
         try:
-            with urllib.request.urlopen(req, timeout=1800) as r: return json.load(r)
+            return _stream(req, log)
         except urllib.error.HTTPError as e:
             msg = e.read().decode('utf-8', 'replace')[:800]
             if e.code in (429, 500, 502, 503, 504) and attempt < 3:
                 log(f'⚠ Grok API {e.code}，{20 * (attempt + 1)} 秒後重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'Grok API {e.code}：{msg}')
-        except (urllib.error.URLError, TimeoutError) as e:
-            if attempt < 3: log(f'⚠ 連唔到 Grok（{e}），重試'); time.sleep(20 * (attempt + 1)); continue
+        except (urllib.error.URLError, TimeoutError, ConnectionError, RuntimeError) as e:
+            if isinstance(e, RuntimeError) and '中斷' not in str(e): raise
+            if attempt < 3: log(f'⚠ Grok 連線問題（{e}），重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'連唔到 Grok：{e}')
 
 
