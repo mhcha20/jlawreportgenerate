@@ -59,5 +59,9 @@ def main():
     if bad: die('PDF 文字回查有數字對唔上')
     lim = MAX_PAGES + (4 if T.get('jlaw_html') else 0)   # 加 J Law 觀點一節可多 4 頁
     if pages > lim: die(f'{pages} 頁，超過上限 {lim}')
+    if os.environ.get('FORMAT_STRICT') == '1':   # 網站版：硬性跟足 10/30 範本格式（見 format_check.py）
+        import format_check
+        errs = format_check.check(S, T, pages, jlaw_required=os.environ.get('JLAW_REQUIRED') == '1')
+        if errs: die('格式未跟足範本（' + str(len(errs)) + ' 項），逐項補返再提交：\n- ' + '\n- '.join(errs))
 
 if __name__ == '__main__': main()

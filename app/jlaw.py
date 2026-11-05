@@ -59,10 +59,42 @@ def prev_market_report(date):
     rows = [r for r in get_json('/api/sync')['rows'] if r[0] == 'market' and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] < date]
     if not rows: return None, ''
     r = sorted(rows, key=lambda r: (r[2][:10], r[3]), reverse=True)[0]
-    with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: data = f.read()
+    with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read())
+
+
+def _pdf_text(data):
+    """PDF → 文字：優先 pdftotext -layout（保留表格版面），冇 poppler 先用 pypdf"""
+    import subprocess
+    try:
+        p = subprocess.run(['pdftotext', '-layout', '-', '-'], input=data, capture_output=True, timeout=120)
+        if p.returncode == 0 and p.stdout.strip(): return p.stdout.decode('utf-8', 'replace')
+    except Exception: pass
     from pypdf import PdfReader
-    txt = '\n'.join((p.extract_text() or '') for p in PdfReader(io.BytesIO(data)).pages)
-    return r[2], txt
+    return '\n'.join((p.extract_text() or '') for p in PdfReader(io.BytesIO(data)).pages)
+
+
+def report_by_name(prefix):
+    """Drive 入面檔名以 prefix 開頭嘅最新一份報告：(名, 文字)；冇就 (None, '')"""
+    rows = [r for r in get_json('/api/sync')['rows'] if r[2].startswith(prefix)]
+    if not rows: return None, ''
+    r = sorted(rows, key=lambda r: r[3], reverse=True)[0]
+    with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read())
+
+
+def jlaw_materials(date, max_n=3, max_age=10):
+    """J Law 觀點私人資料夾：發布日期（檔名 YYYY-MM-DD）≤ date、10 日內，最新 max_n 份 → [(名, 文字)]。要 JLAW_ADMIN_PASSWORD"""
+    pw = os.environ.get('JLAW_ADMIN_PASSWORD', '')
+    if not pw: return None
+    h = {'x-admin-password': pw}
+    with _open(f'{SITE}/api/upload?op=jlaw-list', data=b'', headers=h, method='POST') as r: files = json.load(r)['files']
+    lo = (dt.date.fromisoformat(date) - dt.timedelta(days=max_age)).isoformat()
+    pick = sorted([f for f in files if re.match(r'\d{4}-\d\d-\d\d', f['name']) and lo <= f['name'][:10] <= date], key=lambda f: f['name'], reverse=True)[:max_n]
+    out = []
+    for f in pick:
+        with _open(f'{SITE}/api/upload?op=jlaw-get&id={f["id"]}', data=b'', headers=h, method='POST', timeout=300) as r:
+            data = r.read()
+        out.append((f['name'], _pdf_text(data) if data[:4] == b'%PDF' else data.decode('utf-8', 'replace')))
+    return out
 
 
 def has_report(date):

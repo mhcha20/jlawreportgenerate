@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEN = os.path.join(ROOT, 'gen')
 MODEL = os.environ.get('CLAUDE_MODEL', 'claude-opus-5-5')
 EFFORT = os.environ.get('CLAUDE_EFFORT', 'high')
-MAX_BUILDS = int(os.environ.get('MAX_BUILDS', '8'))
+MAX_BUILDS = int(os.environ.get('MAX_BUILDS', '10'))
 MAX_TURNS = 40
 # 美元 / 百萬 token（Opus 5.5）：輸入、輸出、讀快取、寫快取
 PRICE = dict(inp=4.0, out=20.0, cread=0.20, cwrite=5.0)
@@ -19,7 +19,21 @@ PRICE = dict(inp=4.0, out=20.0, cread=0.20, cwrite=5.0)
 def _read(p): return open(os.path.join(ROOT, p), encoding='utf-8').read()
 
 
-def system_prompt():
+FORMAT_REF = os.environ.get('FORMAT_REF', '2026-10-30_美股大盤分析_JW框架_Claude核實版')
+
+
+def system_prompt(ref_name='', ref_txt=''):
+    ref = (f"""
+
+=== 格式範本（硬性跟足）：{ref_name} ===
+用戶要求每份報告嘅格式、章節、表格、每節篇幅同寫法都要同呢份一樣（數字當然用當日嘅）。逐節對照：
+重點摘要兩段長 box（具體數字）＋六行表（每行分短線／中期／長期或列數字）；資料截止時間；核實動作；缺項逐項申報；數據分歧表；
+三指數比較表＋均線表＋關鍵價位表；成交量／派發日／VIX／廣度；板塊表同五條問答；催化劑（過去 5 個交易日逐日一行）同未來一星期事件表；
+歷史比較；短中長期判斷表＋三情境表＋情境細節表；下一交易日追蹤（≥5 項）、需要核實、條件式行動清單（≥3 項）、可直接轉貼摘要。
+有 J Law 材料就要有「J Law 觀點對照及逐項核實」一節（jlaw_html），寫法照範本（材料清單、風險胃納變化、並列判斷、逐項表）。
+build 有格式擋位（format_check）：任何一節少過範本水平都會失敗，要補返先過。
+{ref_txt[:60000]}
+""" if ref_txt else '')
     return f"""你係 JLaw 報告中心嘅大盤分析員，任務係出「每日美股大盤報告」PDF，做法同 Claude Code 排程 session 完全一樣，只係今次經 API 做：
 你會收到當日 19 張 TradingView 截圖（圖像）、由行情重算嘅數字、上一份大盤報告文字。你要逐張睇圖、用 web_search 核實過去 5 日催化劑同未來一星期日程，然後寫一個完整嘅 work 檔（Python），用 build_report 工具提交。build 會跑 QA 擋位（≥20 項重算、PDF 文字回查、頁數上限）；失敗就睇錯誤訊息改好再提交，直至成功。
 
@@ -50,7 +64,7 @@ def system_prompt():
 
 === gen/market/template_work.py（work 檔範本：所有 TODO／0 都要換成當日內容）===
 {_read('gen/market/template_work.py')}
-"""
+{ref}"""
 
 
 BUILD_TOOL = {
@@ -94,7 +108,7 @@ def with_model(content, model):
 class Job:
     def __init__(s, jid, date, folder, log):
         s.id, s.date, s.dir, s.log = jid, date, folder, log
-        s.usage = dict(inp=0, out=0, cread=0, cwrite=0); s.pdf = None; s.builds = 0; s.pages = None; s.engine = None; s.extra_cost = 0.0
+        s.usage = dict(inp=0, out=0, cread=0, cwrite=0); s.pdf = None; s.builds = 0; s.pages = None; s.engine = None; s.extra_cost = 0.0; s.jlaw_required = False; s.ref_name = None; s.ref_txt = ''
 
     def cost(s): return round(sum(s.usage[k] * PRICE[k] for k in PRICE) / 1e6 + s.extra_cost, 2)
 
@@ -123,6 +137,19 @@ class Job:
         except Exception as e:
             pname, ptxt = None, ''; s.log(f'⚠ 讀唔到上一份報告：{e}')
         s.log(f'上一份大盤報告：{pname or "無"}')
+        try:
+            s.ref_name, s.ref_txt = jlaw.report_by_name(FORMAT_REF)
+        except Exception as e:
+            s.ref_name, s.ref_txt = None, ''; s.log(f'⚠ 讀唔到格式範本：{e}')
+        s.log(f'格式範本：{s.ref_name or "⚠ 搵唔到 " + FORMAT_REF}')
+        try:
+            jl = jlaw.jlaw_materials(date)
+        except Exception as e:
+            jl = []; s.log(f'⚠ 讀唔到 J Law 觀點材料：{e}')
+        if jl is None: s.log('⚠ 未設定 JLAW_ADMIN_PASSWORD：讀唔到 J Law 觀點材料，報告冇 J Law 對照一節'); jl = []
+        else: s.log(f'J Law 觀點材料：{"、".join(n for n, _ in jl) or "分析日前 10 日內冇"}')
+        s.jlaw_required = bool(jl)
+        jtxt = ''.join(f'\n--- {n} ---\n{t[:25000]}' for n, t in jl)
         # 4. Claude
         hk = dt.datetime.now(ZoneInfo('Asia/Hong_Kong'))
         content = []
@@ -136,8 +163,10 @@ class Job:
 上一份大盤報告：{pname or '無'}
 {ptxt[:40000] if ptxt else '（冇上一份，第一份）'}
 
-請：①逐張睇晒 19 張圖抄讀數；②同上一份報告比較（包括廣度線係咪停滯）；③用 web_search 核實過去 5 個交易日催化劑同未來一星期美國經濟數據／重要業績日程；④寫完整 work 檔，用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結今日市況分類收尾。"""})
-        system = system_prompt()
+J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝發布日期，只用 ≤ 分析交易日嘅）：{jtxt or '（冇）'}
+
+請：①逐張睇晒 19 張圖抄讀數；②同上一份報告比較（包括廣度線係咪停滯）；③用 web_search 核實過去 5 個交易日催化劑同未來一星期美國經濟數據／重要業績日程；④格式要硬性跟足系統提示入面嘅格式範本（每節篇幅同範本一樣詳細）；有 J Law 材料就寫 jlaw_html；⑤寫完整 work 檔，用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結今日市況分類收尾。"""})
+        system = system_prompt(s.ref_name, s.ref_txt)
         if os.environ.get('ANTHROPIC_API_KEY'):
             try:
                 return s.run_claude(system, content)
@@ -158,7 +187,7 @@ class Job:
     def run_claude(s, system, content):
         s.engine = 'claude'
         msgs = [{'role': 'user', 'content': with_model(content, MODEL)}]
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(); idle = 0
         for turn in range(MAX_TURNS):
             resp = s.call(client, system, msgs)
             msgs.append({'role': 'assistant', 'content': resp.content})
@@ -176,6 +205,8 @@ class Job:
             if s.pdf:
                 txt = ''.join(b.text for b in resp.content if b.type == 'text').strip()
                 s.log('完成：' + txt[:400]); return
+            idle += 1
+            if idle >= 3: raise RuntimeError('Claude 連續 3 次冇提交 work 檔，停止')
             msgs.append({'role': 'user', 'content': '未有成功嘅 PDF。請用 build_report 提交完整 work 檔。'})
         raise RuntimeError('對話輪數用晒都未出到 PDF')
 
@@ -207,7 +238,8 @@ class Job:
         s.log(f'第 {s.builds} 次 build…')
         try:
             p = subprocess.run([sys.executable, os.path.join(GEN, 'market', 'build.py'), s.date, wp, '--out', s.dir], capture_output=True, text=True, timeout=600,
-                               cwd=GEN, env={**os.environ, 'MARKET_SUFFIX': 'Grok核實版' if s.engine == 'grok' else 'Claude核實版'})
+                               cwd=GEN, env={**os.environ, 'MARKET_SUFFIX': 'Grok核實版' if s.engine == 'grok' else 'Claude核實版',
+                                                     'FORMAT_STRICT': os.environ.get('FORMAT_STRICT', '1'), 'JLAW_REQUIRED': '1' if s.jlaw_required else '0'})
         except subprocess.TimeoutExpired:
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 超時（>10 分鐘）'}
         out = (p.stdout + '\n' + p.stderr).strip()
