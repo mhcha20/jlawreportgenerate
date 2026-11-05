@@ -202,15 +202,22 @@ class H(BaseHTTPRequestHandler):
             d = (q.get('date') or [''])[0]
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
             try:
-                th = jlaw.themes(); rows = []
+                th = jlaw.themes(); rows = []; dc = jlaw.drive_cards(d)
+                mine = {j.get('ticker') for j in all_jobs() if j.get('kind') == 'stock' and j['date'] == d and j['status'] == 'done'}
+                busy = {j.get('ticker') for j in all_jobs() if j.get('kind') == 'stock' and j['date'] == d and j['status'] in ('queued', 'running')}
                 for r in jlaw.stock_list(d):
                     x = {k: r.get(k) for k in ('ticker', 'status', 'have', 'need', 'missing', 'layout')}
                     if r.get('kind') == 'ADR': x['layout'] = 'foreign'
                     tk = r.get('ticker', ''); t2 = tk.zfill(5) if tk.isdigit() and len(tk) <= 5 else tk
                     x['theme'], x['name'] = th.get(tk) or th.get(t2) or ('未分類', '')
+                    x['done'] = 'busy' if tk in busy else 'site' if tk in mine else 'drive' if tk in dc else ''   # 已經出過／做緊：網頁會提示
                     rows.append(x)
                 return s._send(200, {'date': d, 'rows': rows, 'themes_ok': bool(th)})
             except Exception as e: return s._send(502, {'error': str(e)})
+        if p == '/api/market_done':   # 大盤：呢日本站做過／Drive 已有？
+            d = (q.get('date') or [''])[0]
+            site = any(j.get('kind', 'market') == 'market' and j['date'] == d and j['status'] in ('done', 'queued', 'running') for j in all_jobs())
+            return s._send(200, {'site': site, 'drive': jlaw.has_report(d)})
         if p == '/api/shots':
             d = (q.get('date') or [''])[0]
             try:

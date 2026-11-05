@@ -49,6 +49,7 @@ button:disabled { opacity:.45; cursor:default; }
 .slist .grp { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; color:var(--mute); margin-top:6px; }
 .slist .grp:first-child { margin-top:0; } .slist .grp button { padding:3px 9px; font-size:12px; font-weight:500; }
 .slist label small { color:var(--mute); font-size:11px; margin-left:auto; }
+.slist label small.dn { color:var(--ok); font-weight:600; } .slist label small.busy { color:var(--warn); }
 #viewer { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; display:flex; flex-direction:column; }
 #viewer[hidden] { display:none; }
 #viewer .vbar { display:flex; gap:8px; align-items:center; padding:10px 12px; background:var(--card); border-bottom:1px solid var(--line); }
@@ -174,6 +175,10 @@ async function checkShots() {
 }
 $('date').onchange = checkShots; $('reload').onclick = checkShots;
 $('go').onclick = async () => {
+  try {
+    const d = await api('/api/market_done?date=' + $('date').value);
+    if ((d.site || d.drive) && !confirm(`${$('date').value} 嘅大盤報告${d.site ? '本站已經出過（或者做緊）' : 'Drive 已經有'}。\n再做會再收一次費（約 US$2–8）。確定要重做？`)) return;
+  } catch (e) {}
   $('go').disabled = true; $('goMsg').textContent = '';
   try {
     const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({date: $('date').value, upload: $('up').checked})});
@@ -270,11 +275,13 @@ function chipRow(el, items, cur, set) {
   el.innerHTML = items.map(([k, label]) => `<button class="${k === cur ? 'on' : ''}" data-k="${esc(k)}">${esc(label)}</button>`).join('');
   el.querySelectorAll('button').forEach(b => b.onclick = () => { set(b.dataset.k); drawStocks(); });
 }
+const DONE = {site: ['✓已出', '呢日本站已經出咗報告'], drive: ['✓Drive', 'Drive 報告中心已經有呢日嘅行動卡'], busy: ['做緊', '呢日做緊／排緊隊']};
 function box(x) {
   const ok = x.status === 'ok';
   const none = x.status === 'none';
   const tip = (x.name ? x.name + '｜' : '') + (ok ? '截圖齊' : none ? '呢日未有截圖' : '截圖未齊' + (x.missing && x.missing.length ? '，缺 ' + x.missing.join('、') : ''));
-  return `<label class="${ok ? '' : 'bad'}" title="${esc(tip)}"><input type="checkbox" ${ok ? '' : 'disabled'} ${picked.has(x.ticker) ? 'checked' : ''} onchange="pick('${x.ticker}', this.checked)">${esc(x.ticker)}${ok ? '' : none ? ' –' : ' ✗'}${mktOf(x) === 'etf' ? '<small>ETF</small>' : ''}</label>`;
+  const dn = DONE[x.done];
+  return `<label class="${ok ? '' : 'bad'}" title="${esc(tip + (dn ? '｜' + dn[1] : ''))}"><input type="checkbox" ${ok ? '' : 'disabled'} ${picked.has(x.ticker) ? 'checked' : ''} onchange="pick('${x.ticker}', this.checked)">${esc(x.ticker)}${ok ? '' : none ? ' –' : ' ✗'}${dn ? `<small class="dn ${x.done}">${dn[0]}</small>` : mktOf(x) === 'etf' ? '<small>ETF</small>' : ''}</label>`;
 }
 function drawStocks() {
   try { localStorage.setItem('sview', JSON.stringify({sort: $('ssort').value, mkt: sMkt})); } catch (e) {}
@@ -324,6 +331,9 @@ $('wsave').onclick = async () => {
 $('sall').onclick = () => { shown().filter(x => x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); };
 $('snone').onclick = () => { picked.clear(); drawStocks(); };
 $('sgo').onclick = async () => {
+  const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
+  const again = [...picked].filter(t => by[t] && by[t].done && by[t].done !== 'busy').sort(codeCmp);
+  if (again.length && !confirm(`以下 ${again.length} 隻 ${$('sdate').value} 已經出過報告：\n${again.map(t => t + '（' + (by[t].done === 'site' ? '本站已出' : 'Drive 已有') + '）').join('、')}\n\n再做會再收一次費（每隻約 US$2–8）。確定要重做？`)) return;
   if (picked.size > 5 && !confirm(`出 ${picked.size} 隻股票報告，估計 US$${picked.size * 2}–${picked.size * 4}、要 ${Math.ceil(picked.size / 2) * 15} 分鐘左右。確定？`)) return;
   $('sgo').disabled = true; $('sgoMsg').textContent = '';
   try {

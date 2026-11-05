@@ -97,6 +97,17 @@ def jlaw_materials(date, max_n=3, max_age=10):
     return out
 
 
+def drive_cards(date):
+    """Drive 報告中心已經有 date 嘅行動卡嘅股票代號（檔名 YYYY-MM-DD_TICKER_行動卡…）"""
+    try: rows = get_json('/api/sync')['rows']
+    except Exception: return set()
+    out = set()
+    for r in rows:
+        m = re.match(rf'^{re.escape(date)}_([A-Za-z0-9.]+)_行動卡', r[2])
+        if m: out.add(m.group(1).upper())
+    return out
+
+
 def has_report(date):
     """Drive 已經有 date 嘅大盤報告？"""
     try: return any(r[0] == 'market' and r[2].startswith(date) for r in get_json('/api/sync')['rows'])
