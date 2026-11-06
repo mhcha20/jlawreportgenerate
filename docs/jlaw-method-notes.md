@@ -93,7 +93,7 @@
   5. R.S.（整理者推斷：相對強度 Relative Strength）
   6. R&R&S（整理者推斷：報酬、風險同止損）
   7. Board Market Edge（整理者推斷：大市／大盤優勢）
-  8. F.T.（用戶推斷：Follow Through 跟進確認；第 7 節強勁趨勢有提「跟進走勢（follow through）」）
+  8. F.T.（用戶推斷：Follow Through 跟進確認；第 7 節強勁趨勢有提「跟進走勢（follow through）」。用戶 2026-11-06 補充：相關概念 **CFT＝Confirmed Follow Through**（確認嘅跟進走勢）；CFT 呢個縮寫原文 51 頁都冇出現，係用戶提供）
   9. M.I.（用戶推斷：最可能係 Market Intelligence）
 
 ## 7. 優勢 1：動能與趨勢（Momentum & Trend）（p.15–20）
