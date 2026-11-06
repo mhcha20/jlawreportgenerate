@@ -8,7 +8,7 @@
 環境變數：GEMINI_API_KEY（必須）、GEMINI_MODEL（默認 gemini-4-argon）、GEMINI_SEARCH_MODEL（上網核實用，默認同 GEMINI_MODEL）、
 GEMINI_REASONING（選填 low／medium／high）、GEMINI_PRICE_IN／OUT／CACHED（美元／百萬 token，只用嚟估用量，默認 2／10／0.2；
 以 Google AI Studio 帳單為準；上網核實（grounding）每次請求另計，未包）。"""
-import http.client, json, os, time, types, urllib.error, urllib.request
+import http.client, json, os, socket, threading, time, types, urllib.error, urllib.request
 
 BASE = 'https://generativelanguage.googleapis.com/v1beta'
 MODEL = os.environ.get('GEMINI_MODEL', 'gemini-4-argon')
@@ -105,31 +105,46 @@ def _stream(body, log, cancel=lambda: None):
         req = _req(f'{BASE}/openai/chat/completions', dict(body, stream=True, stream_options={'include_usage': True}),
                    {'Authorization': f'Bearer {os.environ["GEMINI_API_KEY"]}', 'Accept': 'text/event-stream'}, IDLE)
         with urllib.request.urlopen(req, timeout=IDLE) as r:
-            for raw in r:
-                cancel()   # 撳咗停止就喺串流途中即刻停
-                line = raw.decode('utf-8', 'replace').strip()
-                if not line.startswith('data:'): continue
-                data = line[5:].strip()
-                if data == '[DONE]': break
-                try: ev = json.loads(data)
-                except json.JSONDecodeError: continue
-                if ev.get('error'): raise RuntimeError(f'Gemini 串流出錯：{json.dumps(ev["error"], ensure_ascii=False)[:500]}')
-                usage = ev.get('usage') or usage
-                for ch in ev.get('choices') or []:
-                    finish = ch.get('finish_reason') or finish
-                    dl = ch.get('delta') or {}
-                    if dl.get('content'): msg['content'] += dl['content']
-                    for tc in dl.get('tool_calls') or []:
-                        k = tc.get('index', len(msg['tool_calls']))
-                        cur = msg['tool_calls'].setdefault(k, {'id': None, 'type': 'function', 'function': {'name': '', 'arguments': ''}})
-                        if not cur['function']['name']: log('Gemini 開始寫 work 檔…' if (tc.get('function') or {}).get('name') == 'build_report' else 'Gemini 睇資料…')
-                        if tc.get('id'): cur['id'] = tc['id']
-                        if tc.get('extra_content'): cur['extra_content'] = tc['extra_content']   # thought_signature，要原封不動送返
-                        f = tc.get('function') or {}
-                        if f.get('name'): cur['function']['name'] += f['name']
-                        if f.get('arguments'):
-                            cur['function']['arguments'] += f['arguments']; arg_chars += len(f['arguments'])
-                            if time.time() - last_note > 60: log(f'Gemini 寫緊 work 檔（{arg_chars:,} 字）…'); last_note = time.time()
+            stop = threading.Event()
+            def watch():   # Gemini 靜靜思考時冇資料，迴圈檢查唔到「停止」：另開 thread 每 2 秒睇，撳咗就切斷連線（2026-11-06 撳停止冇反應）
+                while not stop.wait(2):
+                    try: cancel()
+                    except Exception:
+                        try: r.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+                        except Exception: pass
+                        return
+            threading.Thread(target=watch, daemon=True).start()
+            try:
+                for raw in r:
+                    cancel()   # 撳咗停止就喺串流途中即刻停
+                    line = raw.decode('utf-8', 'replace').strip()
+                    if not line.startswith('data:'): continue
+                    data = line[5:].strip()
+                    if data == '[DONE]': break
+                    try: ev = json.loads(data)
+                    except json.JSONDecodeError: continue
+                    if ev.get('error'): raise RuntimeError(f'Gemini 串流出錯：{json.dumps(ev["error"], ensure_ascii=False)[:500]}')
+                    usage = ev.get('usage') or usage
+                    for ch in ev.get('choices') or []:
+                        finish = ch.get('finish_reason') or finish
+                        dl = ch.get('delta') or {}
+                        if dl.get('content'): msg['content'] += dl['content']
+                        for tc in dl.get('tool_calls') or []:
+                            k = tc.get('index', len(msg['tool_calls']))
+                            cur = msg['tool_calls'].setdefault(k, {'id': None, 'type': 'function', 'function': {'name': '', 'arguments': ''}})
+                            if not cur['function']['name']: log('Gemini 開始寫 work 檔…' if (tc.get('function') or {}).get('name') == 'build_report' else 'Gemini 睇資料…')
+                            if tc.get('id'): cur['id'] = tc['id']
+                            if tc.get('extra_content'): cur['extra_content'] = tc['extra_content']   # thought_signature，要原封不動送返
+                            f = tc.get('function') or {}
+                            if f.get('name'): cur['function']['name'] += f['name']
+                            if f.get('arguments'):
+                                cur['function']['arguments'] += f['arguments']; arg_chars += len(f['arguments'])
+                                if time.time() - last_note > 60: log(f'Gemini 寫緊 work 檔（{arg_chars:,} 字）…'); last_note = time.time()
+            except Exception:
+                cancel()   # 係用戶停止切斷嘅就報「取消」，唔好當斷線重試
+                raise
+            finally: stop.set()
+        cancel()   # 用戶停止切斷連線時串流會「正常」完結，喺度報取消
         msg['tool_calls'] = [v for _, v in sorted(msg['tool_calls'].items())]
         if not msg['tool_calls']: del msg['tool_calls']
         if not msg['content'] and 'tool_calls' not in msg and finish is None: raise ConnectionError('Gemini 串流中斷，冇收到完整回覆')
