@@ -40,6 +40,14 @@ if STRICT:
     if S.get('stars') != st_need or re.sub(r'\s+', ' ', str(S.get('rating', ''))).strip() != want:
         die(f'評等同分數唔對應：分數 {S["score"]:.1f}／100 應該係「{want}」（★ <30｜★★ 30–49｜★★★ 50–69｜★★★★ 70–89｜★★★★★ ≥90），'
             f'而家寫 rating={S.get("rating")!r}、stars={S.get("stars")}。照分數改 rating／stars；如果覺得評等先啱，就逐格覆核九構面星數（分數由星數計），唔好兩樣唔夾。')
+    # 價位次序（用戶 2026-11-06 要求）：減倉線 ≤ 回踩區下限；離場線 ≤ 減倉線；回踩止損 ≤ 離場線（唔可以喺回踩區入面就要減倉）
+    zlo, zhi = sorted(S['B']['zone'])[:2]; red, ext, bstop = S.get('reduce'), S.get('exitp'), S['B'].get('stop')
+    bad = [x for x, ok in ((f'減倉線 {red:.2f} 喺回踩區 {zlo:.2f}–{zhi:.2f} 入面或上面（要 ≤ 回踩區下限 {zlo:.2f}）', red <= zlo + 1e-9),
+                           (f'離場線 {ext:.2f} 高過減倉線 {red:.2f}（要離場線 ≤ 減倉線）', ext <= red + 1e-9),
+                           (f'回踩止損 {bstop:.2f} 高過離場線 {ext:.2f}（要止損 ≤ 離場線）', bstop <= ext + 1e-9)) if not ok]
+    if bad and len(str(S.get('level_note', ''))) < 20:
+        die('價位次序唔夾：' + '；'.join(bad) + '。重訂嘅價位照呢個次序改（回踩區下限 ≥ 減倉 ≥ 離場 ≥ 止損）；'
+            '如果係未失效嘅承襲價本身唔夾（規則唔准改），就照用承襲值，喺 S["level_note"] 寫明邊條係承襲、點解唔夾（≥20 字）。')
     if not hasattr(w, 'qa'): die('work 檔要有 qa(m, S, T)：用 sqa.chk()／chk_true() 重算 spec／texts 入面寫死嘅數字（52 週高低、均線、ATR、量比、各價位距離％、R 值、升跌％、計數同日期序列）')
     w.qa(m, S, T)
     nq, nbad = sqa.qa_report()
