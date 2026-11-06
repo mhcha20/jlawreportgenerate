@@ -97,7 +97,7 @@ def _run(j, agent, stock):
             j['status'] = 'done'; keep()
             if j.get('auto_upload'):
                 try:
-                    for f in job.pdfs: r = jlaw.upload(f); log('已上載 Drive：' + json.dumps(r, ensure_ascii=False)[:200])
+                    for f in job.pdfs: r = jlaw.upload(f); log('已上載 Drive：' + os.path.basename(f) + ('（取代同名舊檔）' if r.get('replaced') else ''))
                     j['uploaded'] = now()
                 except Exception as e: log(f'⚠ 上載失敗：{e}')
         except agent.Cancelled:

@@ -45,11 +45,11 @@ def s2(m, S, T):
         if r.get('pc') is not None: chk(f'圖面前收 {t}', r['pc'], s.pc, 0.0051 if s.c < 1000 else 0.51)
         if r.get('vol_m') is not None and s.v:
             diff = pct(r['vol_m'] * 1e6, s.v)
-            dv.append(([f'{SHOT_OF[t]}', f'{r["vol_m"]:.2f}M', f'{s.v:,.0f}', f'{diff:+.2f}%', '用行情做分子同 50 日均量做分母（同一來源），圖面量只作對照' if abs(diff) > 0.5 else '吻合'], 'y' if abs(diff) > 3 else ''))
+            dv.append(([f'{SHOT_OF[t]}', f'{r["vol_m"]:.2f}M', f'{s.v:,.0f}', P(diff), '用行情做分子同 50 日均量做分母（同一來源），圖面量只作對照' if abs(diff) > 0.5 else '吻合'], 'y' if abs(diff) > 3 else ''))
     for k, r in (S.get('index_readings') or {}).items():
         if k in m.idx and r.get('c') is not None:
             s = m.idx[k]; ok = chk(f'圖面收市 {k}', r['c'], s.c, 0.051)
-            dv.append(([k, FI(r['c']), FI(s.c), f'{r["c"] - s.c:+.2f}', '吻合' if ok else '指數收市同 Yahoo 唔一致：以 Yahoo 為準，查日期'], '' if ok else 'y'))
+            dv.append(([k, FI(r['c']), FI(s.c), N(r['c'] - s.c), '吻合' if ok else '指數收市同 Yahoo 唔一致：以 Yahoo 為準，查日期'], '' if ok else 'y'))
     o.append(sub('★ 缺項（逐項申報，V1.0 第三節第 5／6 條）'))
     gaps = [[a, b] for a, b in _rows(T, 'gaps')]
     gaps.append(['Yahoo 無行情嘅項目', '、'.join(CHART_ONLY + [x['shot'] for x in PR['index'] if x['shot'] not in m.idx]) +
