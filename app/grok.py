@@ -32,11 +32,12 @@ def _part(b):
 IDLE = int(os.environ.get('XAI_IDLE_TIMEOUT', '300'))   # 串流超過呢個秒數冇任何資料就當斷線重試
 
 
-def _stream(req, log):
+def _stream(req, log, cancel=lambda: None):
     """讀 Responses API 串流（SSE），回傳最後嘅 response 物件；途中記低進度（上網搜尋、寫 work 檔）"""
     final = None; arg_chars = 0; last_note = time.time()
     with urllib.request.urlopen(req, timeout=IDLE) as r:
         for raw in r:
+            cancel()   # 撳咗停止就喺串流途中即刻停
             line = raw.decode('utf-8', 'replace').strip()
             if not line.startswith('data:'): continue
             data = line[5:].strip()
@@ -58,14 +59,14 @@ def _stream(req, log):
     return final
 
 
-def _post(body, log):
+def _post(body, log, cancel=lambda: None):
     key = os.environ['XAI_API_KEY']
     data = json.dumps(dict(body, stream=True), ensure_ascii=False).encode()
     for attempt in range(4):
         req = urllib.request.Request(BASE + '/responses', data=data, method='POST',
                                      headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json', 'Accept': 'text/event-stream'})
         try:
-            return _stream(req, log)
+            return _stream(req, log, cancel)
         except urllib.error.HTTPError as e:
             msg = e.read().decode('utf-8', 'replace')[:800]
             if e.code in (429, 500, 502, 503, 504) and attempt < 3:
@@ -116,7 +117,7 @@ def run(job, system, content):
         job.log('Grok 分析中…')
         body = {'model': MODEL, 'input': inp, 'tools': TOOLS, 'store': False, 'max_output_tokens': 64000}
         if os.environ.get('XAI_REASONING'): body['reasoning'] = {'effort': os.environ['XAI_REASONING']}
-        r = _post(body, job.log)
+        r = _post(body, job.log, job.check_cancel)
         u = r.get('usage') or {}
         tin += u.get('input_tokens', 0) or 0; tout += u.get('output_tokens', 0) or 0
         cached = ((u.get('input_tokens_details') or {}).get('cached_tokens') or 0)

@@ -146,7 +146,7 @@ class Job:
         for t in jlaw.MSHOTS:
             f = sh['files'][t]
             imgs.append((t, f, jlaw.download(f['id'])))
-        s.log(f'已下載 19 張截圖（{sh["name"]}）')
+        s.log(f'已下載 19 張截圖（{sh["name"]}）'); s.check_cancel()
         # 2. 行情
         s.log('攞行情（jlaw-report /api/ohlcv）…')
         def prep(*extra):
@@ -235,6 +235,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         return '\n'.join(lines) or '今次冇 Longbridge 核實'
 
     def analyze(s, system, content):
+        s.check_cancel()   # 準備資料期間撳咗停止就唔好開始收費
         pref = getattr(s, 'engine_pref', None)   # 網頁揀咗邊個引擎（auto／gemini／grok）
         if pref == 'gemini':
             import gemini
@@ -303,6 +304,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         for attempt in range(4):
             try:
                 with client.beta.messages.stream(**kw) as st:
+                    for _ in st: s.check_cancel()   # 撳咗停止就喺串流途中即刻停
                     resp = st.get_final_message()
                 break
             except (anthropic.RateLimitError, anthropic.InternalServerError, anthropic.APIConnectionError) as e:

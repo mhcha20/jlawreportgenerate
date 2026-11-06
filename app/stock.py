@@ -90,7 +90,7 @@ class StockJob(agent.Job):
         if not sh['ok']: raise RuntimeError(sh['why'])
         sd = os.path.join(s.dir, 'shots'); os.makedirs(sd, exist_ok=True)
         for f in sh['files']: open(os.path.join(sd, f['name']), 'wb').write(jlaw.download(f['id']))
-        s.log(f'已下載 {len(sh["files"])} 張截圖（{sh["kind"]} 版面）')
+        s.log(f'已下載 {len(sh["files"])} 張截圖（{sh["kind"]} 版面）'); s.check_cancel()
         subprocess.run([sys.executable, os.path.join(GEN, 'prep.py'), 'images', t, sd], capture_output=True, text=True, timeout=300)
         lbs, lbmsg = None, ''
         if not lb.symbol(t): lbmsg = '今次冇 Longbridge 核實（日股／韓股 Longbridge 直連未驗證，照舊用 Yahoo＋截圖）'
@@ -107,7 +107,7 @@ class StockJob(agent.Job):
             s.log(f'Yahoo 未有 {date} 收市 bar，用 Longbridge 補')
             p, lb_filled = prep_data('--extra', json.dumps([lbs[date]])), True
         if p.returncode != 0: raise RuntimeError('行情準備失敗：' + (p.stderr or p.stdout)[-1200:])
-        s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200])
+        s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200]); s.check_cancel()
         lbtxt = s.lb_verify(t, date, lbs, lbmsg, lb_filled)
         summary = metrics_summary(t, date)
         try: prior = jlaw.prior_stock(t, date)

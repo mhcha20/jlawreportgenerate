@@ -64,7 +64,7 @@ def search(question, log=print, model=None):
     body = {'contents': [{'role': 'user', 'parts': [{'text': question}]}], 'tools': [{'google_search': {}}]}
 
     def go():
-        with urllib.request.urlopen(_req(url, body, {'x-goog-api-key': os.environ['GEMINI_API_KEY']}, 300), timeout=300) as r:
+        with urllib.request.urlopen(_req(url, body, {'x-goog-api-key': os.environ['GEMINI_API_KEY']}, 120), timeout=120) as r:
             return json.load(r)
     d = _retry(go, log, '上網核實')
     c = (d.get('candidates') or [{}])[0]
@@ -94,7 +94,7 @@ def _part(b):
     return {'type': 'image_url', 'image_url': {'url': f'data:{src["media_type"]};base64,{src["data"]}'}}
 
 
-def _stream(body, log):
+def _stream(body, log, cancel=lambda: None):
     def go():
         msg = {'role': 'assistant', 'content': '', 'tool_calls': {}}; usage = {}; finish = None
         arg_chars, last_note = 0, time.time()
@@ -102,6 +102,7 @@ def _stream(body, log):
                    {'Authorization': f'Bearer {os.environ["GEMINI_API_KEY"]}', 'Accept': 'text/event-stream'}, IDLE)
         with urllib.request.urlopen(req, timeout=IDLE) as r:
             for raw in r:
+                cancel()   # 撳咗停止就喺串流途中即刻停
                 line = raw.decode('utf-8', 'replace').strip()
                 if not line.startswith('data:'): continue
                 data = line[5:].strip()
@@ -135,12 +136,14 @@ def _stream(body, log):
 def run(job, system, content):
     from agent import with_model
     if not enabled(): raise RuntimeError('未設定 GEMINI_API_KEY')
+    job.check_cancel()
     job.log(f'Gemini 上網核實中（Google 搜尋，{SEARCH_MODEL}）…')
     try:
         rtxt, nsrc, _ = search(research_question(job), job.log)
         job.log(f'Gemini 上網核實完成：{nsrc} 個來源')
     except Exception as e:
         rtxt = f'（上網核實失敗：{str(e)[:300]}。今次冇網上核實，催化劑／日程標「未核實」。）'; job.log('⚠ ' + rtxt[:200])
+    job.check_cancel()
     parts = [_part(b) for b in with_model(content, MODEL)]
     parts += [{'type': 'text', 'text': '上網核實（Google 搜尋，網站代做）：\n' + rtxt}, {'type': 'text', 'text': NOTE}]
     msgs = [{'role': 'system', 'content': system}, {'role': 'user', 'content': parts}]
@@ -150,7 +153,7 @@ def run(job, system, content):
         job.log('Gemini 分析中…')
         body = {'model': MODEL, 'messages': msgs, 'tools': TOOLS, 'max_tokens': 60000}
         if os.environ.get('GEMINI_REASONING'): body['reasoning_effort'] = os.environ['GEMINI_REASONING']
-        msg, u, finish = _stream(body, job.log)
+        msg, u, finish = _stream(body, job.log, job.check_cancel)
         p_in = u.get('prompt_tokens', 0) or 0
         cached = (u.get('prompt_tokens_details') or {}).get('cached_tokens', 0) or 0
         out = max((u.get('total_tokens', 0) or 0) - p_in, u.get('completion_tokens', 0) or 0)   # 思考 token 唔喺 completion_tokens，但係照收費
