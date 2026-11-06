@@ -82,6 +82,7 @@ jlawreportgenerate（本 repo，Railway）── app/server.py：網頁＋API＋
 | POST `/api/jobs/<id>/upload` | 上載全部 PDF 去報告中心 Drive（同名舊檔放垃圾桶） |
 | POST `/api/generate` | `{date, upload}` 大盤；`{kind:"stock", date, tickers:[…], upload}` 個股 |
 | POST `/api/generate`（亞洲） | `{kind:"amarket", date, markets:["hk","jp","kr"], upload, engine}` |
+| GET `/api/market_ready?date=&tickers=` | 出個股前：邊啲市場當日大盤報告未上載 Drive（網頁先問） |
 | GET `/api/asia_shots?date=` | 三個市場截圖狀態＋本站／Drive 做過未 |
 | GET `/api/dates` | 大盤日期＋個股日期（`stock_dates`＝大盤日期＋最近 10 個工作日） |
 | GET `/api/shots?date=` | 大盤 19 張截圖狀態 |

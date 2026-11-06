@@ -288,6 +288,11 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
+        if p == '/api/market_ready':   # 出個股前：同市場當日大盤報告上載咗 Drive 未？（未有就網頁先問）
+            d = (q.get('date') or [''])[0]; ts = [x for x in (q.get('tickers') or [''])[0].split(',') if x]
+            if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
+            try: return s._send(200, {'missing': jlaw.market_ready(d, ts)})
+            except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/jlaw_list':   # J Law 觀點私人資料夾（只回檔名同日期，唔回內容）
             try: return s._send(200, {'files': [{'name': f['name'], 'created': f.get('createdTime')} for f in jlaw.jlaw_list()[:15]]})
             except Exception as e: return s._send(502, {'error': str(e)})

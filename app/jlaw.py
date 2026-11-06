@@ -92,6 +92,23 @@ def asia_title(ticker):
     return '香港大盤分析' if len(t) == 5 or (len(t) == 4 and t[0] == '0') else '日本大盤分析' if len(t) == 4 else '韓國大盤分析' if len(t) == 6 else None
 
 
+def market_ready(date, tickers):
+    """出個股前檢查：每隻股票對應嘅大盤報告（美股／香港／日本／韓國）喺 Drive 有冇 date 當日一份。
+    回傳 [{'market': 名, 'title': 報告標題, 'tickers': [...], 'latest': 最近一份檔名或 None}]（只列未有當日嗰啲市場）"""
+    rows = get_json('/api/sync')['rows']; groups = {}
+    for t in tickers:
+        title = asia_title(t) or '美股大盤分析'
+        groups.setdefault(title, []).append(t)
+    out = []
+    for title, ts in groups.items():
+        mine = [r for r in rows if re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] <= date and
+                (title in r[2] if title != '美股大盤分析' else _us_market(r))]
+        if any(r[2][:10] == date for r in mine): continue
+        latest = max(mine, key=lambda r: (r[2][:10], r[3]))[2] if mine else None
+        out.append({'market': title.replace('大盤分析', ''), 'title': title, 'tickers': ts, 'latest': latest})
+    return out
+
+
 def has_asia_report(title, date, rows=None):
     try: return any(title in r[2] and r[2].startswith(date) for r in (rows if rows is not None else get_json('/api/sync')['rows']))
     except Exception: return False

@@ -520,6 +520,10 @@ $('sgo').onclick = async () => {
   const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
   const again = [...picked].filter(t => by[t] && by[t].done && by[t].done !== 'busy').sort(codeCmp);
   if (again.length && !confirm(`以下 ${again.length} 隻 ${$('sdate').value} 已經出過報告：\n${again.map(t => t + '（' + (by[t].done === 'site' ? '本站已出' : 'Drive 已有') + '）').join('、')}\n\n再做會再收一次費（每隻約 US$2–8）。確定要重做？`)) return;
+  try {   // 同市場當日大盤報告未上載 Drive → 先問（個股會用最近一份大盤報告）
+    const mr = await api(`/api/market_ready?date=${$('sdate').value}&tickers=${encodeURIComponent([...picked].join(','))}`);
+    if (mr.missing.length && !confirm(`Drive 未有 ${$('sdate').value} 當日嘅大盤報告：\n` + mr.missing.map(m => `・${m.market}（影響 ${m.tickers.length} 隻：${m.tickers.slice(0, 8).join('、')}${m.tickers.length > 8 ? '…' : ''}）\n　會改用：${m.latest || '冇（只用截圖指數）'}`).join('\n') + `\n\n建議先出當日大盤報告並「上載 Drive」再出個股。照出？`)) return;
+  } catch (e) {}
   if (picked.size > 5 && !confirm(`出 ${picked.size} 隻股票報告，估計 US$${picked.size * 2}–${picked.size * 4}、要 ${Math.ceil(picked.size / 2) * 15} 分鐘左右。確定？`)) return;
   $('sgo').disabled = true; $('sgoMsg').textContent = '';
   try {
