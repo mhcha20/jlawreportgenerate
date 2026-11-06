@@ -81,6 +81,30 @@ def _text(item):
     return ''.join(c.get('text', '') for c in item.get('content') or [] if c.get('type') in ('output_text', 'text'))
 
 
+OLD_WORK = json.dumps({'work_py': '（舊版 work 檔已省略，以最新一版為準）'}, ensure_ascii=False)
+IMG_NOTE = ('（截圖已經喺第一次提交 work 檔之前睇過；為咗慳用量，之後唔再重送圖片。修改時以你 work 檔入面已抄低嘅讀數為準，'
+            '唔好改動圖面讀數，除非錯誤訊息直接指出。）')
+
+
+def _compact(inp):
+    """store:false 每輪重送成段對話：第一次提交 work 檔之後，截圖、舊版 work 檔、舊 build 結果、舊縮圖都唔再重送（只留最新一版），
+    慳 input token；最新一版 work 檔同佢嘅 build 結果完整保留，AI 照樣改得。"""
+    builds = [x for x in inp if x.get('type') == 'function_call' and x.get('name') == 'build_report']
+    if not builds: return
+    last = builds[-1]['call_id']
+    u = inp[1]
+    if isinstance(u.get('content'), list) and any(p.get('type') == 'input_image' for p in u['content']):
+        u['content'] = [p for p in u['content'] if p.get('type') != 'input_image'] + [{'type': 'input_text', 'text': IMG_NOTE}]
+    old = {x['call_id'] for x in builds if x['call_id'] != last}
+    for x in inp:
+        if x.get('type') == 'function_call' and x.get('call_id') in old: x['arguments'] = OLD_WORK
+        elif x.get('type') == 'function_call_output' and x.get('call_id') in old and len(x.get('output', '')) > 600:
+            x['output'] = x['output'][:600] + '…（舊版 build 結果已截短）'
+    thumbs = [i for i, x in enumerate(inp) if x.get('role') == 'user' and isinstance(x.get('content'), list)
+              and any(p.get('type') == 'input_image' for p in x['content']) and i > 1]
+    for i in thumbs[:-1]: inp[i] = {'role': 'user', 'content': '（之前一版嘅縮圖已省略）'}
+
+
 def run(job, system, content):
     from agent import with_model
     inp = [{'role': 'system', 'content': system},
@@ -88,19 +112,22 @@ def run(job, system, content):
     tin = tout = searches = idle = 0
     for turn in range(MAX_TURNS):
         job.check_cancel()
+        _compact(inp)
         job.log('Grok 分析中…')
         body = {'model': MODEL, 'input': inp, 'tools': TOOLS, 'store': False, 'max_output_tokens': 64000}
         if os.environ.get('XAI_REASONING'): body['reasoning'] = {'effort': os.environ['XAI_REASONING']}
         r = _post(body, job.log)
         u = r.get('usage') or {}
         tin += u.get('input_tokens', 0) or 0; tout += u.get('output_tokens', 0) or 0
+        cached = ((u.get('input_tokens_details') or {}).get('cached_tokens') or 0)
         job.extra_cost = (tin * PRICE_IN + tout * PRICE_OUT) / 1e6
         out = r.get('output') or []
         n_s = sum(1 for x in out if x.get('type') == 'web_search_call'); searches += n_s
         calls = [x for x in out if x.get('type') == 'function_call']
         msg = ''.join(_text(x) for x in out if x.get('type') == 'message').strip()
         status = r.get('status')
-        job.log(f'Grok 回覆（{status}{"；工具 " + str(len(calls)) if calls else ""}{"；上網搜尋 " + str(n_s) + " 次" if n_s else ""}；累計約 US${job.cost()}）')
+        job.log(f'Grok 回覆（{status}{"；工具 " + str(len(calls)) if calls else ""}{"；上網搜尋 " + str(n_s) + " 次" if n_s else ""}；'
+                f'今輪輸入 {u.get("input_tokens", 0) or 0:,} token{"（快取 " + format(cached, ",") + "）" if cached else ""}；累計約 US${job.cost()}）')
         # 對話紀錄（store=False，每次重送）：只保留訊息同 function call
         if msg: inp.append({'role': 'assistant', 'content': msg})
         for c in calls: inp.append({'type': 'function_call', 'call_id': c['call_id'], 'name': c['name'], 'arguments': c.get('arguments') or ''})

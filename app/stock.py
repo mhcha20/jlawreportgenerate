@@ -52,7 +52,7 @@ build 會擋：work 檔冇 TODO、今日動作 ≤40 字、朗讀稿字數、行
 - 行動卡：S['sub'] ≥35 字；biggest ≥150；cost_tail ≥80，要有「回踩區入場（主目標 x.xxR）」；corr ≥40；foot ≥60。九構面每格理由 ≥30 字。
 - 本體：oneliner ≥120；p1a／p1b／p1c 表現 ≥45、判斷 ≥10；stage_txt ≥120；hhhl ≥80；mom ≥50；vol_rows 6 行每行 ≥40；pattern ≥40；pattern_notes 2 條各 ≥30；
   sr_rows ≥5 行；pb／bo 各 3 點各 ≥35；canslim 7 行；fund_rows ≥6 行（每行 ≥3 格有內容）；risk 5 項各 ≥15；analyst_line／smart_line／sector_line ≥40；canslim_line ≥30；
-  rrr_note ≥40、f1_note ≥30、f2_interp ≥40、plan_line ≥60、next3_line ≥40、vsprior ≥60、stage_test ≥30、earn_line ≥20；flat ≥50、held ≥30；next3 3 項；keep／noup 各 ≥4 項；q1–q4 各 ≥25；open ≥2 項各 ≥30。
+  rrr_note ≥40、f1_note ≥30、f2_interp ≥40、plan_line ≥60、next3_line ≥40、vsprior ≥60、stage_test ≥30、earn_line ≥20；flat ≥50、held ≥30；next3 3 項；keep／noup 各 ≥4 項；q1–q4 各 ≥25；open ≥2 項各 ≥30；setup ≥15、swing_only ≥15、r3_note ≥20、zone_hi_def／zone_lo_def 各 ≥10（都要寫具體數字同理由）。
 - 附錄：thr ≥5 行、caliber ≥4 項各 ≥25、conflicts ≥4、sources ≥4 項各 ≥15、smart ≥4 項各 ≥20、corr_html ≥120。頁數：本體 9–10 頁、附錄 ≥3 頁。
 
 === gen/template_work.py（work 檔範本：所有 TODO／0 都要換成當日內容；另加 qa(m, S, T)）===

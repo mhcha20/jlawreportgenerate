@@ -33,6 +33,12 @@ def system_prompt(ref_name='', ref_txt=''):
 歷史比較；短中長期判斷表＋三情境表＋情境細節表；下一交易日追蹤（≥5 項）、需要核實、條件式行動清單（≥3 項）、可直接轉貼摘要。
 有 J Law 材料就要有「J Law 觀點對照及逐項核實」一節（jlaw_html），寫法照範本（材料清單、風險胃納變化、並列判斷、逐項表）。
 build 有格式擋位（format_check）：任何一節少過範本水平都會失敗，要補返先過。
+格式擋位最低要求（gen/market/format_check.py，第一次交就要達到，唔好等 build 攔低先補；每補一次都收費）：
+- 頁數 ≥9（有 J Law 材料 ≥10）；inherit_note ≥60 字；sum_boxes ≥2 段各 ≥90；sum_rows 6 行（處置指示 ≥20，其餘各 ≥45）；gaps ≥3 項。
+- breadth_qa／sector_qa 每個答案 ≥35；sync_box／ma_box／vol_box／dist_box／breadth_box／sector_box／catalysts_box 各 ≥40；vix_para ≥60；breadth_limits ≥30；levels_box ≥30；regime_box ≥80；history_html ≥50；next_week_foot ≥20。
+- past_events ≥5 行（逐日，冇已核實催化劑都要寫「無單一已核實催化劑」＋SPY／QQQ 升跌）；next_week ≥4 項；next_rows ≥5；verify_rows ≥4；action_rows ≥3（SPY／QQQ／IWM 各一）；group_summary ≥150。
+- regime_rows、scenario_rows、scenario_detail 各 3 行，每格 ≥8 字，要寫具體價位／條件（唔好只寫「今日未達成」）。
+- 有 J Law 材料：jlaw_html ≥1200 字、逐項表 ≥5 項。
 {ref_txt[:60000]}
 """ if ref_txt else '')
     return f"""你係 JLaw 報告中心嘅大盤分析員，任務係出「每日美股大盤報告」PDF，做法同 Claude Code 排程 session 完全一樣，只係今次經 API 做：
@@ -307,8 +313,10 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 超時（>10 分鐘）'}
         out = (p.stdout + '\n' + p.stderr).strip()
         if p.returncode != 0:
-            s.log(f'build 未過：{out.splitlines()[-1][:200] if out else "?"}')
-            return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 失敗：\n' + out[-6000:]}
+            key = [l for l in out.splitlines() if l.startswith(('QA 失敗', '✗', '- ')) or '太短' in l or '唔夠' in l][:30]
+            s.log('build 未過：' + ('｜'.join(key)[:600] if key else (out.splitlines()[-1][:200] if out else '?')))
+            head = ('要改嘅位（逐項改晒先再提交，唔好只改一項）：\n' + '\n'.join(key) + '\n\n') if key else ''
+            return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 失敗：\n' + head + '完整輸出（尾段）：\n' + out[-5000:]}
         info = json.loads([l for l in p.stdout.splitlines() if l.startswith('{')][-1])
         s.on_success(info)
         res = [{'type': 'text', 'text': 'build 成功：' + json.dumps(info, ensure_ascii=False) + '\n以下係每頁縮圖，檢查版面（溢出、空白、表格斷開）。冇問題就收尾；要改就再提交完整 work 檔。'}]

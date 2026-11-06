@@ -11,6 +11,8 @@
 
 - [ ] **Longbridge 直連**（2026-11-06 加）：睇部署 log 有冇 `longbridge OK:`；之後出一份美股＋一份港股報告，睇收市核實、業績日有冇寫入附錄。Access Token 有期限，過期要喺 Longbridge 開發者後台續期再改 Railway Variables（報告中心嗰組都要改）。2026-11-06 部署 log `longbridge OK`；大盤報告亦已接（15 隻 ETF 收市核實＋補 bar），睇下一份大盤報告第二節有冇寫。
 
+- [ ] **慳費用改動**（2026-11-06）：Grok 第一次提交 work 檔之後唔再重送截圖、舊版 work 檔、舊 build 結果、舊縮圖（`grok._compact`）；build 失敗時將 QA 失敗／擋位行放最頂、寫入 job log；QA 失敗講清楚重算值 vs 寫死值同容差；個股 prompt 補 5 個漏咗嘅最低字數（setup 等）；大盤 prompt 加 format_check 最低要求。之前：FPS 9 次 build US$7.9、ESTC US$5.3、大盤 US$3.8（全部 Grok，Anthropic 額度未增值）。下一批量吓每次重試幾錢；job log 而家會印「今輪輸入 N token（快取 M）」，睇 xAI 有冇自動快取。xAI 上網搜尋費（大盤一份 24 次）未計入估算。
+
 ## 用戶提過、可以做
 - [ ] **報告中心「📸 截圖檢查」日期**：只加香港「當日」，過咗午夜就睇唔到上一個亞洲交易日（例如 11/06 凌晨睇唔到 11/05）。改法同本站 `jlaw.stock_dates()`（加最近幾個工作日）。要喺 Jlaw-report 開 PR 俾用戶 merge。
 - [ ] **XLV 2026-11-04 要重出**：Grok 出咗 76 分 ★★★ 觀察，按新評等規則應該係 ★★★★ 值得買入。
