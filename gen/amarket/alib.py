@@ -107,10 +107,14 @@ def utc_to(date_hhmm_utc):
     return f'{e:%Y-%m-%d %H:%M} {PR["tzname"]}', f'{k:%Y-%m-%d %H:%M}', e
 
 # ---------------------------------------------------------------- 格式
-def _sg(x, d): return '' if round(x, d) == 0 else ('▲' if x > 0 else '▼')   # 升跌一律用符號（用戶 2026-11-06：唔好一時 ▼ 一時 ＋）
-def P(x, d=2): return _sg(x, d) + f'{abs(x):.{d}f}%'
-def N(x, d=2): return _sg(x, d) + f'{abs(x):.{d}f}'
-def AR(x, d=2, p=False): return _sg(x, d) + f'{abs(x):.{d}f}' + ('%' if p else '')
+def _sg(x, d):   # 升跌一律 ▲ 綠／▼ 紅（用戶 2026-11-06：唔好一時 ▼ 一時 ＋；用顏色分）；0 冇符號
+    return (None, '') if round(x, d) == 0 else (('pu', '▲') if x > 0 else ('pd', '▼'))
+def _c(x, d, s):
+    cls, a = _sg(x, d)
+    return s if not cls else f'<span class="{cls}">{a}{s}</span>'
+def P(x, d=2): return _c(x, d, f'{abs(x):.{d}f}%')
+def N(x, d=2): return _c(x, d, f'{abs(x):.{d}f}')
+def AR(x, d=2, p=False): return _c(x, d, f'{abs(x):.{d}f}' + ('%' if p else ''))
 def tag(t): return f'<span class="tag">{t}</span>'
 CALC, INF, CHART, EXT = tag('計算結果'), tag('分析推論'), tag('圖表讀數'), tag('外部已核實')
 def sec(num, title): return f'<h2 class="sec"><span class="n">{num}</span>{title}</h2>'

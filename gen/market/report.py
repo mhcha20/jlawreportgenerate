@@ -50,7 +50,7 @@ def s2(m, S, T):
             for k, v in r['ma'].items(): chk(f'圖面 MA{k} {t}', v, s.ma(int(k)), 0.0051)
         if 'vol_m' in r:
             diff = pct(r['vol_m'] * 1e6, s.v)
-            dv.append(([t, f'{r["vol_m"]:.2f}M', f'{s.v:,.0f}', f'{diff:+.2f}%', '用行情做分子同 50 日均量做分母（同一來源），圖面量只作對照' if abs(diff) > 0.5 else '吻合'], 'y' if abs(diff) > 3 else ''))
+            dv.append(([t, f'{r["vol_m"]:.2f}M', f'{s.v:,.0f}', P(diff, 2), '用行情做分子同 50 日均量做分母（同一來源），圖面量只作對照' if abs(diff) > 0.5 else '吻合'], 'y' if abs(diff) > 3 else ''))
     o.append(sub('★ 缺項（逐項申報，V1.0 第三節第 5／6 條）'))
     gaps = [[a, b] for a, b in _rows(T, 'gaps')]
     gaps.append(['Yahoo 無行情嘅項目', '、'.join(CHART_ONLY) + '：只有截圖讀數（標「圖表讀數」），冇外部對照；SOX 無成交量／均線可用，量能判定只用 SPY／QQQ／IWM／板塊 ETF'

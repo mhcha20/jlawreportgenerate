@@ -269,6 +269,9 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
+        if p == '/api/jlaw_list':   # J Law 觀點私人資料夾（只回檔名同日期，唔回內容）
+            try: return s._send(200, {'files': [{'name': f['name'], 'created': f.get('createdTime')} for f in jlaw.jlaw_list()[:15]]})
+            except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/suggest':   # 今日值得出報告推介（唔用 AI）
             d = (q.get('date') or [''])[0]
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
@@ -291,7 +294,19 @@ class H(BaseHTTPRequestHandler):
         p = urlparse(s.path).path
         if not (PW or auth.google_on()): return s._send(503, {'error': '伺服器未設定登入方式（GOOGLE_CLIENT_ID 或 GEN_PASSWORD）'})
         if not s._authed(): return s._send(401, {'error': '未登入'})
-        n = int(s.headers.get('Content-Length') or 0); body = json.loads(s.rfile.read(n) or b'{}') if n else {}
+        n = int(s.headers.get('Content-Length') or 0)
+        if p == '/api/jlaw_upload':   # 上載 J Law 報告 PDF（body＝PDF；?date=發布日期&name=原檔名）→ Drive「J Law 觀點（私人）」
+            q = parse_qs(urlparse(s.path).query); d = (q.get('date') or [''])[0]
+            if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '發布日期要 YYYY-MM-DD'})
+            if n > 30 << 20: return s._send(413, {'error': '檔案太大（上限 30MB）'})
+            stem = re.sub(r'\.pdf$', '', (q.get('name') or ['Update'])[0], flags=re.I)
+            stem = re.sub(r'[^0-9A-Za-z\u4e00-\u9fff]+', '_', stem).strip('_')[:40] or 'Update'
+            stem = re.sub(r'^(JLaw_?)', '', stem, flags=re.I) or 'Update'
+            name = f'{d}_JLaw_{stem}.pdf'
+            try: r = jlaw.upload_jlaw(s.rfile.read(n), name)
+            except Exception as e: return s._send(502, {'error': str(e)})
+            return s._send(200, {'ok': True, 'name': name, 'result': r})
+        body = json.loads(s.rfile.read(n) or b'{}') if n else {}
         if p == '/api/auth': return s._send(200, {'ok': True})
         if p == '/api/watchlist':   # 每日清單（存喺 volume，所有裝置共用）
             ts = []

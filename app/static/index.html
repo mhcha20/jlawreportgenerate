@@ -148,6 +148,18 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
       <div class="mute" style="margin-top:6px">每隻約 15 分鐘、約 US$2–4；同時做 2 隻，其餘排隊。美股會承襲當日大盤報告，建議先出大盤。</div>
     </div>
 
+    <div class="card" id="cardJ">
+      <h2>上載 J Law 報告（私人）</h2>
+      <div class="mute">J Law Update／JLawStock 等 PDF 放入 Drive「J Law 觀點（私人）」資料夾（唔公開、唔入報告中心清單）。美股大盤報告會自動讀發布日 10 日內最新 3 份，寫「J Law 觀點對照及逐項核實」一節。</div>
+      <div class="row" style="margin-top:8px">
+        <div><label for="jfile">PDF 檔案</label><input type="file" id="jfile" accept="application/pdf,.pdf"></div>
+        <div style="flex:0 0 150px"><label for="jdate">發布日期</label><input type="date" id="jdate"></div>
+      </div>
+      <button id="jgo" disabled>上載</button>
+      <div class="msg" id="jmsg"></div>
+      <div class="mute" id="jlist"></div>
+    </div>
+
     <div class="card">
       <h2>報告紀錄</h2>
       <div class="mute" id="autoNote"></div>
@@ -249,6 +261,30 @@ $('ago').onclick = async () => {
     const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({kind: 'amarket', date: $('adate').value, markets: ms, upload: $('aup').checked, engine: $('aeng').value})});
     $('agoMsg').innerHTML = `<span class="ok">已加入 ${r.created} 份（其餘已經做緊），下面睇進度</span>`; loadJobs(); checkAsia();
   } catch (e) { $('agoMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; aState(); }
+};
+// ---- J Law 報告上載（私人資料夾）
+const MON = {jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12};
+function guessDate(n) {   // 由檔名估發布日期：5Nov2026、2026-11-05、20261105
+  let m = n.match(/(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/); if (m && +m[2] <= 12) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = n.match(/(\d{1,2})[\s_-]*([A-Za-z]{3})[a-z]*[\s_-]*(\d{4})/); if (m && MON[m[2].toLowerCase()]) return `${m[3]}-${String(MON[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return '';
+}
+function jState() { $('jgo').disabled = !($('jfile').files[0] && $('jdate').value); }
+$('jfile').onchange = () => { const f = $('jfile').files[0]; if (f) { const g = guessDate(f.name); if (g) $('jdate').value = g; } jState(); };
+$('jdate').onchange = jState;
+async function loadJlaw() {
+  try { const r = await api('/api/jlaw_list'); $('jlist').innerHTML = '資料夾最新：' + (r.files.slice(0, 6).map(f => esc(f.name)).join('、') || '（冇）'); }
+  catch (e) { $('jlist').textContent = '讀唔到資料夾清單：' + e.message; }
+}
+$('jgo').onclick = async () => {
+  const f = $('jfile').files[0], d = $('jdate').value; if (!f || !d) return;
+  if (f.size > 30 << 20) { $('jmsg').innerHTML = '<span class="bad">檔案太大（上限 30MB）</span>'; return; }
+  $('jgo').disabled = true; $('jmsg').textContent = '上載中…';
+  try {
+    const r = await api(`/api/jlaw_upload?date=${d}&name=${encodeURIComponent(f.name)}`, {method: 'POST', body: f, headers: {'Content-Type': 'application/pdf'}});
+    $('jmsg').innerHTML = `<span class="ok">✓ 已上載：${esc(r.name)}</span>`; $('jfile').value = ''; loadJlaw();
+  } catch (e) { $('jmsg').innerHTML = `<span class="bad">上載失敗：${esc(e.message)}</span>`; }
+  jState();
 };
 const MKTN = {hk: '香港', jp: '日本', kr: '韓國'};
 const kindName = j => j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : j.kind === 'amarket' ? (MKTN[j.ticker] || esc(j.ticker)) + '大盤報告' : '大盤報告';
@@ -494,7 +530,7 @@ $('sgo').onclick = async () => {
 function start(user) {
   $('login').hidden = true; $('app').hidden = false;
   if (user) $('who').innerHTML = (user === '密碼' ? '已用密碼登入' : '已登入：' + esc(user)) + ' · <a href="/auth/logout" id="logout">登出</a>';
-  loadDates(); loadJobs(); loadWatch();
+  loadDates(); loadJobs(); loadWatch(); loadJlaw();
 }
 (async () => {
   const err = new URLSearchParams(location.search).get('login_error'); if (err) history.replaceState(null, '', '/');

@@ -118,6 +118,26 @@ def report_by_name(prefix):
     with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read())
 
 
+def jlaw_list():
+    """J Law 觀點私人資料夾檔案（新→舊）：[{id,name,…}]。要 JLAW_ADMIN_PASSWORD"""
+    pw = os.environ.get('JLAW_ADMIN_PASSWORD', '')
+    if not pw: raise RuntimeError('未設定 JLAW_ADMIN_PASSWORD')
+    with _open(f'{SITE}/api/upload?op=jlaw-list', data=b'', headers={'x-admin-password': pw}, method='POST') as r: files = json.load(r)['files']
+    return sorted(files, key=lambda f: f['name'], reverse=True)
+
+
+def upload_jlaw(data, name):
+    """J Law 報告（用戶 send 嘅 PDF）→ 報告中心 /api/upload?cat=jlaw → Drive「J Law 觀點（私人）」（唔開分享、唔入公開清單）。
+    檔名要 YYYY-MM-DD_JLaw_….pdf（YYYY-MM-DD＝發布日期，大盤報告按呢個日期揀 10 日內最新 3 份）"""
+    pw = os.environ.get('JLAW_ADMIN_PASSWORD', '')
+    if not pw: raise RuntimeError('未設定 JLAW_ADMIN_PASSWORD，上載唔到')
+    if not re.match(r'^\d{4}-\d\d-\d\d_JLaw_.+\.pdf$', name): raise RuntimeError('檔名要 YYYY-MM-DD_JLaw_….pdf')
+    if data[:4] != b'%PDF': raise RuntimeError('唔係 PDF')
+    with _open(f'{SITE}/api/upload?name={urllib.parse.quote(name)}&cat=jlaw', data=data,
+               headers={'Content-Type': 'application/pdf', 'x-admin-password': pw}, timeout=300, method='POST') as r:
+        return json.load(r)
+
+
 def jlaw_materials(date, max_n=3, max_age=10):
     """J Law 觀點私人資料夾：發布日期（檔名 YYYY-MM-DD）≤ date、10 日內，最新 max_n 份 → [(名, 文字)]。要 JLAW_ADMIN_PASSWORD"""
     pw = os.environ.get('JLAW_ADMIN_PASSWORD', '')
