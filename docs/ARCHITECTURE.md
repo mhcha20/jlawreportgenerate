@@ -33,6 +33,7 @@ jlawreportgenerate（本 repo，Railway）── app/server.py：網頁＋API＋
 | `app/stock.py` | `StockJob`（個股報告）：個股截圖、行情、上一份報告、當日大盤報告、ESTC 格式範本 → 同一個 `analyze()` → `gen/build.py`。 |
 | `app/grok.py` | Grok 後備：xAI Responses API（`/v1/responses`，`store:false`，每輪重送全部對話，SSE 串流），伺服器端 `web_search`＋function `build_report`。 |
 | `gen/market/` | 大盤報告框架（由 Jlaw-report `tools/stockreport/market/` 搬過嚟）：`prep.py` 攞行情、`mlib.py` 計算／QA 登記、`report.py` 版面、`qa.py` PDF 文字回查、`build.py` 出 PDF＋擋位、`format_check.py` 格式擋位（網站版先有）、`template_work.py` work 檔範本。 |
+| `app/asia.py`／`gen/amarket/` | 香港／日本／韓國大盤報告（2026-11-06）：`AsiaJob`；框架由 `gen/market/` 改，市場設定喺 `profiles.py`，`AMARKET` 環境變數揀市場，資料喺 `gen/amarket/data/<mkt>/`。 |
 | `gen/` | 個股報告框架（由 Jlaw-report `tools/stockreport/` 搬過嚟）：`lib.py` 指標／圖表、`gen.py` 計劃數字＋行動卡、`gen2.py` 本體報告＋附錄、`prep.py` 行情＋裁圖、`build.py`（網站版，改過）、`format_stock.py` 格式擋位、`sqa.py` QA 登記、`render.py` HTML→PDF（Python Playwright）、`style.css`。 |
 | `gen/sig/` | `signals.js`（由 Jlaw-report **原封不動**複製）＋`sigcheck.js`：用報告中心同一套規則解析行動卡，確保入到買賣訊號／回測。要 Node ≥20（Dockerfile 由 `node:22-slim` 複製 node）。 |
 | `docs/` | AI 分析用嘅指令同筆記：`jw-market-analysis-prompt.md`（大盤指令）、`jlaw-myt-stock-prompt-v2.md`（個股指令 V2.0）、`jlaw-method-notes.md`＋`MYT-jlaw-notes-260923.pdf`（J Law 方法）、`WORKER*.md`（流程，原本俾 Claude Code 排程用）、`STOCKREPORT_README.md`（生成器欄位說明）。 |
@@ -80,6 +81,8 @@ jlawreportgenerate（本 repo，Railway）── app/server.py：網頁＋API＋
 | GET `/api/jobs/<id>/page?i=&p=`（`&count=1` 回頁數） | 第 i 份 PDF 第 p 頁 PNG（網頁閱讀窗用） |
 | POST `/api/jobs/<id>/upload` | 上載全部 PDF 去報告中心 Drive（同名舊檔放垃圾桶） |
 | POST `/api/generate` | `{date, upload}` 大盤；`{kind:"stock", date, tickers:[…], upload}` 個股 |
+| POST `/api/generate`（亞洲） | `{kind:"amarket", date, markets:["hk","jp","kr"], upload, engine}` |
+| GET `/api/asia_shots?date=` | 三個市場截圖狀態＋本站／Drive 做過未 |
 | GET `/api/dates` | 大盤日期＋個股日期（`stock_dates`＝大盤日期＋最近 10 個工作日） |
 | GET `/api/shots?date=` | 大盤 19 張截圖狀態 |
 | GET `/api/stocks?date=` | 個股清單（狀態、版面、行業 theme、名） |

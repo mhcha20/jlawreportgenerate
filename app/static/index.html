@@ -86,7 +86,7 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
     <div class="who" id="who"></div>
     <div class="sub">由 Google Drive 截圖自動出大盤同個股報告 · AI 睇圖分析、上網核實 · QA 全過先出 PDF</div>
 
-    <div class="tabs"><button id="tabM" class="on">大盤報告</button><button id="tabS">個股報告</button></div>
+    <div class="tabs"><button id="tabM" class="on">大盤報告</button><button id="tabA">亞洲大盤</button><button id="tabS">個股報告</button></div>
     <div class="card" id="cardM">
       <h2>出大盤報告</h2>
       <div class="row">
@@ -100,6 +100,21 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
       <button class="big" id="go" disabled>出報告</button>
       <div class="msg" id="goMsg"></div>
       <div class="mute" style="margin-top:6px">每份約需 10–20 分鐘；AI API 按用量收費（每份約 US$2–6，完成後會顯示實際用量）。</div>
+    </div>
+
+    <div class="card" id="cardA" hidden>
+      <h2>出香港／日本／韓國大盤報告</h2>
+      <div class="row">
+        <div><label for="adate">交易日（亞洲收市、Mac 17:15 截圖之後）</label><select id="adate"></select></div>
+        <div style="flex:0"><button class="sec" id="areload">重新檢查</button></div>
+      </div>
+      <div class="msg" id="aMsg">檢查截圖中…</div>
+      <div id="alist"></div>
+      <label class="chk"><input type="checkbox" id="aup"> 完成後自動上載到報告中心（Drive）</label>
+      <label class="chk">AI：<select id="aeng"><option value="auto">自動（Claude，用唔到轉 Grok）</option><option value="gemini">Google Gemini</option><option value="grok">xAI Grok</option></select></label>
+      <button class="big" id="ago" disabled>出報告</button>
+      <div class="msg" id="agoMsg"></div>
+      <div class="mute" style="margin-top:6px">三個市場各出一份（剔幾多個出幾多份）。截圖係 TradingView 完整圖表頁（冇均線，均線由行情重算）；廣度、資金流、日韓波動指數未有固定來源，報告會標缺或上網核實。每份約 US$2–6。</div>
     </div>
 
     <div class="card" id="cardS" hidden>
@@ -177,6 +192,7 @@ async function loadDates() {
     $('date').innerHTML = d.dates.map(x => `<option ${x === d.default ? 'selected' : ''}>${x}</option>`).join('');
     const sd = d.stock_dates || d.dates, sdef = d.stock_default || d.default;
     $('sdate').innerHTML = sd.map(x => `<option value="${x}" ${x === sdef ? 'selected' : ''}>${x}${d.dates.includes(x) ? '' : '（未有美股）'}</option>`).join('');
+    $('adate').innerHTML = sd.map(x => `<option value="${x}" ${x === sdef ? 'selected' : ''}>${x}</option>`).join('');
   } catch (e) { $('shotMsg').innerHTML = `<span class="bad">讀唔到 Drive 日期：${esc(e.message)}</span>`; }
   checkShots();
 }
@@ -207,6 +223,35 @@ $('go').onclick = async () => {
   } catch (e) { $('goMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
   $('go').disabled = !shotsOk;
 };
+let asiaOk = new Set(), asiaRows = [];
+async function checkAsia() {
+  const d = $('adate').value; if (!d) return; asiaOk = new Set(); $('ago').disabled = true; $('aMsg').textContent = '檢查截圖中…'; $('alist').innerHTML = '';
+  try {
+    const r = await api('/api/asia_shots?date=' + d); asiaRows = r.markets;
+    $('aMsg').innerHTML = `${esc(d)}（星期${'日一二三四五六'[new Date(d + 'T12:00:00Z').getUTCDay()]}）` + chk(r.checked_at);
+    $('alist').innerHTML = r.markets.map(m => {
+      const ok = m.folder && !m.missing.length; if (ok) asiaOk.add(m.mkt);
+      const st = !m.folder ? `<span class="warn">Drive 未有「${esc(m.path)}」</span>` : m.missing.length ? `<span class="warn">截圖未齊 ${m.have.length}/${m.n}，缺 ${esc(m.missing.join('、'))}</span>` : `<span class="ok">✓ ${m.n} 張齊</span>`;
+      const done = m.site ? ' <span class="mute">· ✓已出（本站）</span>' : m.drive ? ' <span class="mute">· ✓Drive 已有</span>' : '';
+      return `<label class="chk"><input type="checkbox" class="apick" value="${m.mkt}" ${ok ? '' : 'disabled'} ${ok && !m.site && !m.drive ? 'checked' : ''}> <b>${esc(m.title)}</b>　${st}${done}</label>`;
+    }).join('');
+    document.querySelectorAll('.apick').forEach(x => x.onchange = aState); aState();
+  } catch (e) { $('aMsg').innerHTML = `<span class="bad">檢查失敗：${esc(e.message)}</span>`; }
+}
+function aState() { $('ago').disabled = !document.querySelectorAll('.apick:checked').length; }
+$('adate').onchange = checkAsia; $('areload').onclick = checkAsia;
+$('ago').onclick = async () => {
+  const ms = [...document.querySelectorAll('.apick:checked')].map(x => x.value);
+  const again = asiaRows.filter(m => ms.includes(m.mkt) && (m.site || m.drive)).map(m => m.title);
+  if (again.length && !confirm(`${again.join('、')} ${$('adate').value} 已經出過（或者做緊）。\n再做會再收費（每份約 US$2–6）。確定？`)) return;
+  $('ago').disabled = true; $('agoMsg').textContent = '';
+  try {
+    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({kind: 'amarket', date: $('adate').value, markets: ms, upload: $('aup').checked, engine: $('aeng').value})});
+    $('agoMsg').innerHTML = `<span class="ok">已加入 ${r.created} 份（其餘已經做緊），下面睇進度</span>`; loadJobs(); checkAsia();
+  } catch (e) { $('agoMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; aState(); }
+};
+const MKTN = {hk: '香港', jp: '日本', kr: '韓國'};
+const kindName = j => j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : j.kind === 'amarket' ? (MKTN[j.ticker] || esc(j.ticker)) + '大盤報告' : '大盤報告';
 const ST = {queued: ['排隊中', 'warn'], running: ['進行中', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad'], cancelled: ['已取消', '']};
 let canUpload = false, openLog = new Set();
 async function loadJobs() {
@@ -223,7 +268,7 @@ async function loadJobs() {
   if (!list.length) { $('jobs').innerHTML = '<div class="mute">冇符合嘅紀錄</div>'; }
   else $('jobs').innerHTML = list.map(j => {
     const [t, c] = ST[j.status] || [j.status, ''];
-    return `<div class="job"><div class="hd"><b>${esc(j.date)} ${j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : '大盤報告'}</b><span class="st ${c}">${t}</span></div>
+    return `<div class="job"><div class="hd"><b>${esc(j.date)} ${kindName(j)}</b><span class="st ${c}">${t}</span></div>
       <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'gemini' ? ' · Gemini' : j.engine === 'grok' ? (j.engine_pref === 'grok' ? ' · Grok' : ' · 後備 Grok') : j.engine === 'claude' ? ' · Claude' : j.engine_pref && j.engine_pref !== 'auto' ? ` · ${j.engine_pref === 'gemini' ? 'Gemini' : 'Grok'}` : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
       ${j.result ? `<div class="mute">${esc(j.result.rating)} ${esc(j.result.score)}／100 · ${esc(j.result.action)}</div>` : ''}
       <div class="mute">${esc(String(j.error || j.last || '').replace(/\{\s*"(ticker|date|mode|status)"[\s\S]*$/, '').replace(/[*#`]/g, '').slice(0, 220))}</div>
@@ -241,7 +286,7 @@ async function loadJobs() {
 }
 let allJobs = [], shownFailed = [], jFilter = 'all';
 try { jFilter = localStorage.getItem('jfilter') || 'all'; } catch (e) {}
-const jobName = j => `${j.date} ${j.kind === 'stock' ? j.ticker : '大盤'}`;
+const jobName = j => `${j.date} ${j.kind === 'stock' ? j.ticker : j.kind === 'amarket' ? (MKTN[j.ticker] || j.ticker) + '大盤' : '大盤'}`;
 async function retryJob(id, btn) {
   const j = allJobs.find(x => x.id === id);
   if (!confirm(`重做 ${j ? jobName(j) : ''} 報告？會再收一次費（每份約 US$2–8）。`)) return;
@@ -304,12 +349,12 @@ async function upload(id, btn) {
 }
 function setEngines(e) {   // 冇 key 嘅引擎唔俾揀；記住上次揀咩
   if (!e) return;
-  for (const id of ['eng', 'seng']) {
+  for (const id of ['eng', 'seng', 'aeng']) {
     const sel = $(id); if (!sel) continue;
     [...sel.options].forEach(o => { const ok = o.value === 'auto' ? (e.claude || e.grok) : e[o.value]; o.disabled = !ok; if (!ok) o.textContent += '（未設定）'; });
     try { const v = localStorage.getItem('engine'); if (v && [...sel.options].some(o => o.value === v && !o.disabled)) sel.value = v; } catch (x) {}
     if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) { const f = [...sel.options].find(o => !o.disabled); if (f) sel.value = f.value; }
-    sel.onchange = () => { try { localStorage.setItem('engine', sel.value); } catch (x) {} for (const o of ['eng', 'seng']) if ($(o)) $(o).value = sel.value; };
+    sel.onchange = () => { try { localStorage.setItem('engine', sel.value); } catch (x) {} for (const o of ['eng', 'seng', 'aeng']) if ($(o)) $(o).value = sel.value; };
   }
 }
 let stocks = [], picked = new Set();
@@ -319,8 +364,12 @@ function chk(at) {   // 最近檢查時間（香港時間）
   const f = `${z(h.getUTCMonth() + 1)}/${z(h.getUTCDate())} ${z(h.getUTCHours())}:${z(h.getUTCMinutes())}`;
   return ` <span class="mute">· 最近檢查 ${esc(f)}（香港）</span>`;
 }
-function tab(which) { $('tabM').classList.toggle('on', which === 'M'); $('tabS').classList.toggle('on', which === 'S'); $('cardM').hidden = which !== 'M'; $('cardS').hidden = which !== 'S'; if (which === 'S' && !stocks.length) loadStocks(); }
-$('tabM').onclick = () => tab('M'); $('tabS').onclick = () => tab('S');
+function tab(which) {
+  for (const k of ['M', 'A', 'S']) { $('tab' + k).classList.toggle('on', which === k); $('card' + k).hidden = which !== k; }
+  if (which === 'S' && !stocks.length) loadStocks();
+  if (which === 'A') checkAsia();
+}
+$('tabM').onclick = () => tab('M'); $('tabA').onclick = () => tab('A'); $('tabS').onclick = () => tab('S');
 async function loadStocks() {
   const d = $('sdate').value; if (!d) return; $('sMsg').textContent = '檢查個股截圖中…'; $('slist').innerHTML = '';
   try {

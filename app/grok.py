@@ -13,6 +13,9 @@ MAX_TURNS = 40
 NOTE = ('（今次由 xAI Grok 做。你有 web_search 工具：一定要用嚟核實過去 5 個交易日每日嘅市場消息／催化劑，同未來一星期美國經濟數據、聯儲局、'
         '重要業績日程，每項附來源網站同日期；搵唔到先標「未核實」，唔好補造。S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「由 xAI Grok 生成」。）')
 
+NOTE_ASIA = ('（今次由 xAI Grok 做。你有 web_search 工具：一定要用嚟核實過去 5 個交易日每日嘅本市場消息／催化劑，同未來一星期本地經濟數據、央行、'
+             '重要業績日程，每項附來源網站同日期；搵唔到先標「未核實」，唔好補造。S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「由 xAI Grok 生成」。）')
+
 TOOLS = [{'type': 'web_search'},
          {'type': 'function', 'name': 'inspect_data',
           'description': '睇資料用（唔計 build 次數，但每份報告最多 3 次，要一次過 print 晒需要嘅數）：跑一段短 Python，m 已經準備好（大盤＝mlib.Market(DATE)；個股＝lib.metrics(TICKER)），回傳 print() 結果。唔好用 build_report 嚟 probe 資料。',
@@ -109,7 +112,7 @@ def _compact(inp):
 def run(job, system, content):
     from agent import with_model
     inp = [{'role': 'system', 'content': system},
-           {'role': 'user', 'content': [_part(b) for b in with_model(content, MODEL)] + [{'type': 'input_text', 'text': NOTE}]}]
+           {'role': 'user', 'content': [_part(b) for b in with_model(content, MODEL)] + [{'type': 'input_text', 'text': NOTE_ASIA if hasattr(job, 'research_q') else NOTE}]}]
     tin = tout = searches = idle = 0
     for turn in range(MAX_TURNS):
         job.check_cancel()

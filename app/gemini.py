@@ -76,6 +76,7 @@ def search(question, log=print, model=None):
 
 
 def research_question(job):
+    if hasattr(job, 'research_q'): return job.research_q()   # 亞洲大盤（asia.AsiaJob）
     t = getattr(job, 'ticker', None)
     if t:
         return (f'股票代號 {t}，分析交易日 {job.date}（收市後）。請用 Google 搜尋核實並逐項列出，每項附來源網站名稱同日期：'

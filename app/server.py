@@ -82,7 +82,11 @@ def _run(j, agent, stock):
         def log(msg):
             j['log'].append(f'{dt.datetime.now(HKZ):%H:%M:%S} {msg}'); save(j); print(jid, msg, flush=True)
         folder = os.path.join(JOBS, jid)
-        job = stock.StockJob(jid, j['date'], j['ticker'], folder, log) if j.get('kind') == 'stock' else agent.Job(jid, j['date'], folder, log)
+        if j.get('kind') == 'stock': job = stock.StockJob(jid, j['date'], j['ticker'], folder, log)
+        elif j.get('kind') == 'amarket':
+            import asia
+            job = asia.AsiaJob(jid, j['date'], j['ticker'], folder, log)   # ticker＝市場 hk／jp／kr
+        else: job = agent.Job(jid, j['date'], folder, log)
         job.cancelled = lambda: jid in CANCEL
         job.engine_pref = j.get('engine_pref', 'auto')
         def keep():
@@ -240,6 +244,23 @@ class H(BaseHTTPRequestHandler):
             d = (q.get('date') or [''])[0]
             site = any(j.get('kind', 'market') == 'market' and j['date'] == d and j['status'] in ('done', 'queued', 'running') for j in all_jobs())
             return s._send(200, {'site': site, 'drive': jlaw.has_report(d)})
+        if p == '/api/asia_shots':   # 香港／日本／韓國大盤截圖齊唔齊＋本站／Drive 做過未
+            d = (q.get('date') or [''])[0]
+            if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
+            try:
+                import asia
+                from concurrent.futures import ThreadPoolExecutor
+                out, root = [], jlaw.ls(jlaw.MROOT)
+                try: sync = jlaw.get_json('/api/sync')['rows']
+                except Exception: sync = []
+                with ThreadPoolExecutor(3) as ex: shots = dict(zip(asia.PROFILES, ex.map(lambda k: jlaw.asia_shots(k, d, root), asia.PROFILES)))
+                for k, pr in asia.PROFILES.items():
+                    sh = shots[k]
+                    site = any(j.get('kind') == 'amarket' and j.get('ticker') == k and j['date'] == d and j['status'] in ('done', 'queued', 'running') for j in all_jobs())
+                    out.append({'mkt': k, 'name': pr['name'], 'title': pr['title'], 'folder': sh['folder'], 'path': sh['name'], 'n': len(pr['shots']),
+                                'have': sorted(sh['files']), 'missing': sh['missing'], 'site': site, 'drive': jlaw.has_asia_report(pr['title'], d, sync)})
+                return s._send(200, {'date': d, 'markets': out, 'checked_at': now_iso()})
+            except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/shots':
             d = (q.get('date') or [''])[0]
             try:
@@ -288,6 +309,11 @@ class H(BaseHTTPRequestHandler):
             if eng == 'gemini' and not os.environ.get('GEMINI_API_KEY'): return s._send(503, {'error': '伺服器未設定 GEMINI_API_KEY'})
             if eng == 'grok' and not os.environ.get('XAI_API_KEY'): return s._send(503, {'error': '伺服器未設定 XAI_API_KEY'})
             if not (os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('XAI_API_KEY') or eng == 'gemini'): return s._send(503, {'error': '伺服器未設定 ANTHROPIC_API_KEY／XAI_API_KEY'})
+            if body.get('kind') == 'amarket':   # 香港／日本／韓國大盤：markets＝['hk','jp','kr'] 揀幾個
+                ms = [str(x) for x in body.get('markets') or [] if str(x) in ('hk', 'jp', 'kr')]
+                if not ms: return s._send(400, {'error': '揀最少一個市場'})
+                made = [new_job(d, upload=bool(body.get('upload')), kind='amarket', ticker=k, engine=eng) for k in ms]
+                return s._send(200, {'jobs': [j_['id'] for j_, _ in made], 'created': sum(1 for _, c in made if c)})
             if body.get('kind') == 'stock':
                 ts = [str(x).strip().upper() for x in body.get('tickers') or [] if re.fullmatch(r'[A-Za-z0-9.]{1,10}', str(x).strip())]
                 if not ts: return s._send(400, {'error': '揀最少一隻股票'})

@@ -50,13 +50,50 @@ def market_shots(date):
     return {'folder': f[0]['id'], 'name': fname, 'files': got, 'missing': [t for t in MSHOTS if t not in got]}
 
 
+# ---------------------------------------------------------------- 亞洲大盤（香港／日本／韓國）
+def asia_shots(mkt, date, root=None):
+    """大盤根資料夾 HK／JP／KR 子資料夾 → 日期資料夾 → NN_<名>_Daily.png。回傳同 market_shots 一樣格式（missing 按 profiles.py 嘅 shots）"""
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gen', 'amarket'))
+    from profiles import PROFILES
+    pr = PROFILES[mkt]; fname = folder_name(date)
+    sub = [x for x in (root if root is not None else ls(MROOT)) if x['name'].strip().upper() == pr['drive_sub']]
+    if not sub: return {'folder': None, 'files': {}, 'missing': list(pr['shots']), 'name': f'{pr["drive_sub"]}/{fname}'}
+    f = [x for x in ls(sub[0]['id']) if x['name'].strip().lower() == fname]
+    if not f: return {'folder': None, 'files': {}, 'missing': list(pr['shots']), 'name': f'{pr["drive_sub"]}/{fname}'}
+    got = {}
+    for x in ls(f[0]['id']):
+        m = re.match(r'(\d\d)_(.+)_Daily\.png$', x['name'], re.I)
+        if m: got[m.group(2).upper()] = x
+    return {'folder': f[0]['id'], 'name': f'{pr["drive_sub"]}/{fname}', 'files': got, 'missing': [t for t in pr['shots'] if t not in got]}
+
+
+def prev_asia_report(title, date):
+    """同市場最近一份（早過 date）亞洲大盤報告：(名, 文字)；冇就 (None, '')"""
+    rows = [r for r in get_json('/api/sync')['rows'] if title in r[2] and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] < date]
+    if not rows: return None, ''
+    r = sorted(rows, key=lambda r: (r[2][:10], r[3]), reverse=True)[0]
+    with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read())
+
+
+def has_asia_report(title, date, rows=None):
+    try: return any(title in r[2] and r[2].startswith(date) for r in (rows if rows is not None else get_json('/api/sync')['rows']))
+    except Exception: return False
+
+
 def download(file_id):
     with _open(f'https://drive.google.com/uc?export=download&id={file_id}', timeout=180) as r: return r.read()
 
 
+ASIA_TITLES = ('香港大盤分析', '日本大盤分析', '韓國大盤分析')   # 亞洲大盤報告（同美股一樣上載去大盤資料夾），美股嘅「上一份」要剔走
+
+
+def _us_market(r): return r[0] == 'market' and not any(x in r[2] for x in ASIA_TITLES)
+
+
 def prev_market_report(date):
-    """Drive 入面最近一份（早過 date）大盤報告：(名, 文字)；冇就 (None, '')"""
-    rows = [r for r in get_json('/api/sync')['rows'] if r[0] == 'market' and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] < date]
+    """Drive 入面最近一份（早過 date）美股大盤報告：(名, 文字)；冇就 (None, '')"""
+    rows = [r for r in get_json('/api/sync')['rows'] if _us_market(r) and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] < date]
     if not rows: return None, ''
     r = sorted(rows, key=lambda r: (r[2][:10], r[3]), reverse=True)[0]
     with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read())
@@ -110,7 +147,7 @@ def drive_cards(date):
 
 def has_report(date):
     """Drive 已經有 date 嘅大盤報告？"""
-    try: return any(r[0] == 'market' and r[2].startswith(date) for r in get_json('/api/sync')['rows'])
+    try: return any(_us_market(r) and r[2].startswith(date) for r in get_json('/api/sync')['rows'])
     except Exception: return False
 
 
@@ -222,7 +259,7 @@ def prior_stock(ticker, date):
 
 def market_report_for(date):
     """美股個股要承襲當日大盤報告：優先 date 當日（Claude核實版＞Grok核實版＞其他），冇就最近一份。→ (名, 文字, 係咪當日)"""
-    rows = [r for r in get_json('/api/sync')['rows'] if r[0] == 'market' and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] <= date]
+    rows = [r for r in get_json('/api/sync')['rows'] if _us_market(r) and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] <= date]
     if not rows: return None, '', False
     rank = lambda r: (r[2][:10], 2 if 'Claude核實版' in r[2] else 1 if '核實版' in r[2] else 0, r[3])
     r = sorted(rows, key=rank, reverse=True)[0]
