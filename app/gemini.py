@@ -43,17 +43,20 @@ def _req(url, body, headers, timeout):
                                   headers={'Content-Type': 'application/json', **headers})
 
 
-def _retry(fn, log, what):
-    for attempt in range(4):
+SEARCH_TIMEOUT = int(os.environ.get('GEMINI_SEARCH_TIMEOUT', '300'))   # 亞洲大盤搜尋問題長，120 秒連續超時 4 次（2026-11-06 日本）
+
+
+def _retry(fn, log, what, tries=4):
+    for attempt in range(tries):
         try:
             return fn()
         except urllib.error.HTTPError as e:
             msg = e.read().decode('utf-8', 'replace')[:800]
-            if e.code in (429, 500, 502, 503, 504) and attempt < 3:
+            if e.code in (429, 500, 502, 503, 504) and attempt < tries - 1:
                 log(f'⚠ Gemini {what} {e.code}，{20 * (attempt + 1)} 秒後重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'Gemini {what} {e.code}：{msg}')
         except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException) as e:   # IncompleteRead＝串流中途斷線
-            if attempt < 3: log(f'⚠ Gemini {what} 連線問題（{e}），重試'); time.sleep(20 * (attempt + 1)); continue
+            if attempt < tries - 1: log(f'⚠ Gemini {what} 連線問題（{e}），重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'連唔到 Gemini：{e}')
 
 
@@ -64,9 +67,9 @@ def search(question, log=print, model=None):
     body = {'contents': [{'role': 'user', 'parts': [{'text': question}]}], 'tools': [{'google_search': {}}]}
 
     def go():
-        with urllib.request.urlopen(_req(url, body, {'x-goog-api-key': os.environ['GEMINI_API_KEY']}, 120), timeout=120) as r:
+        with urllib.request.urlopen(_req(url, body, {'x-goog-api-key': os.environ['GEMINI_API_KEY']}, SEARCH_TIMEOUT), timeout=SEARCH_TIMEOUT) as r:
             return json.load(r)
-    d = _retry(go, log, '上網核實')
+    d = _retry(go, log, '上網核實', tries=2)   # 搜尋超時再試一次就算，唔好拖十分鐘
     c = (d.get('candidates') or [{}])[0]
     text = ''.join(p.get('text', '') for p in (c.get('content') or {}).get('parts') or [] if not p.get('thought'))
     chunks = (c.get('groundingMetadata') or {}).get('groundingChunks') or []
