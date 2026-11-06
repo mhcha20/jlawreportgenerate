@@ -37,7 +37,9 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
 #login { max-width:360px; margin:60px auto; }
 .gbtn { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:13px; border:1px solid var(--line); border-radius:8px; background:#fff; color:#1f1f1f; font-weight:600; text-decoration:none; margin:6px 0 12px; }
 .who { font-size:12px; color:var(--mute); margin-bottom:10px; } .who a { color:var(--pri); }
-.tabs { display:flex; gap:6px; margin-bottom:12px; } .tabs button { flex:1; background:transparent; color:var(--pri); border:1px solid var(--pri); }
+.tabs { display:flex; gap:6px; margin-bottom:12px; position:sticky; top:0; z-index:5; background:var(--bg); padding:6px 0; }
+.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+details.card > summary { cursor:pointer; list-style:none; } details.card > summary::-webkit-details-marker { display:none; } details.card[open] > summary .mute { display:none; } .tabs button { flex:1; background:transparent; color:var(--pri); border:1px solid var(--pri); }
 .tabs button.on { background:var(--pri); color:#fff; }
 .slist { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:6px; margin-top:10px; max-height:340px; overflow:auto; }
 .slist label { display:flex; gap:5px; align-items:center; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:5px 7px; color:var(--ink); margin:0; }
@@ -148,8 +150,8 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
       <div class="mute" style="margin-top:6px">每隻約 15 分鐘、約 US$2–4；同時做 2 隻，其餘排隊。美股會承襲當日大盤報告，建議先出大盤。</div>
     </div>
 
-    <div class="card" id="cardJ">
-      <h2>上載 J Law 報告（私人）</h2>
+    <details class="card" id="cardJ">
+      <summary><h2 style="display:inline">上載 J Law 報告（私人）</h2> <span class="mute">撳打開</span></summary>
       <div class="mute">J Law Update／JLawStock 等 PDF 放入 Drive「J Law 觀點（私人）」資料夾（唔公開、唔入報告中心清單）。美股大盤報告會自動讀發布日 10 日內最新 3 份，寫「J Law 觀點對照及逐項核實」一節。</div>
       <div class="row" style="margin-top:8px">
         <div><label for="jfile">PDF 檔案</label><input type="file" id="jfile" accept="application/pdf,.pdf"></div>
@@ -158,7 +160,7 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
       <button id="jgo" disabled>上載</button>
       <div class="msg" id="jmsg"></div>
       <div class="mute" id="jlist"></div>
-    </div>
+    </details>
 
     <div class="card">
       <h2>報告紀錄</h2>
@@ -297,17 +299,18 @@ async function loadJobs() {
   allJobs = d.jobs;
   const JF = [['all', '全部'], ['done', '完成'], ['failed', '失敗／取消'], ['active', '做緊／排隊']];
   const inF = (j, k) => k === 'all' || (k === 'done' ? j.status === 'done' : k === 'failed' ? (j.status === 'failed' || j.status === 'cancelled') : (j.status === 'running' || j.status === 'queued'));
-  chipRow($('jfilter'), JF.map(([k, l]) => [k, `${l} ${d.jobs.filter(j => inF(j, k)).length}`]), jFilter, k => { jFilter = k; try { localStorage.setItem('jfilter', k); } catch (e) {} loadJobs(); });
-  const list = d.jobs.filter(j => inF(j, jFilter)).slice(0, 60);
-  shownFailed = list.filter(j => j.status === 'failed' || j.status === 'cancelled');
-  $('rbar').hidden = !shownFailed.length; $('rall').textContent = `重做顯示中全部失敗／已取消（${shownFailed.length}）`;
+  chipRow($('jfilter'), JF.map(([k, l]) => [k, `${l} ${d.jobs.filter(j => inF(j, k)).length}`]), jFilter, k => { jFilter = k; jShow = 10; try { localStorage.setItem('jfilter', k); } catch (e) {} loadJobs(); });
+  const all = d.jobs.filter(j => inF(j, jFilter)), list = all.slice(0, jShow);
+  shownFailed = all.filter(j => j.status === 'failed' || j.status === 'cancelled');
+  $('rbar').hidden = !shownFailed.length || jFilter !== 'failed';   // 只喺「失敗／取消」篩選先出，避免撳錯
+  $('rall').textContent = `重做顯示中全部失敗／已取消（${shownFailed.length}）`;
   if (!list.length) { $('jobs').innerHTML = '<div class="mute">冇符合嘅紀錄</div>'; }
   else $('jobs').innerHTML = list.map(j => {
     const [t, c] = ST[j.status] || [j.status, ''];
     return `<div class="job"><div class="hd"><b>${esc(j.date)} ${kindName(j)}</b><span class="st ${c}">${t}</span></div>
       <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'gemini' ? ' · Gemini' : j.engine === 'grok' ? (j.engine_pref === 'grok' ? ' · Grok' : ' · 後備 Grok') : j.engine === 'claude' ? ' · Claude' : j.engine_pref && j.engine_pref !== 'auto' ? ` · ${j.engine_pref === 'gemini' ? 'Gemini' : 'Grok'}` : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
       ${j.result ? `<div class="mute">${esc(j.result.rating)} ${esc(j.result.score)}／100 · ${esc(j.result.action)}</div>` : ''}
-      <div class="mute">${esc(String(j.error || j.last || '').replace(/\{\s*"(ticker|date|mode|status)"[\s\S]*$/, '').replace(/(已上載 Drive：)\{"row":[^,]*, "[^"]*", "([^"]+)"[\s\S]*$/, '$1$2').replace(/[*#`]/g, '').slice(0, 220))}</div>
+      <div class="mute clamp">${esc(String(j.error || j.last || '').replace(/\{\s*"(ticker|date|mode|status)"[\s\S]*$/, '').replace(/(已上載 Drive：)\{"row":[^,]*, "[^"]*", "([^"]+)"[\s\S]*$/, '$1$2').replace(/[*#`]/g, '').slice(0, 220))}</div>
       <div class="acts">${(j.pdfs && j.pdfs.length ? j.pdfs : (j.pdf ? [j.pdf] : [])).map((f, i) => `<button class="sec" onclick="openPdf('${j.id}', ${i})">${f.includes('行動卡') ? '行動卡' : f.includes('終極報告') ? '本體報告' : f.includes('核對附錄') ? '核對附錄' : '睇 PDF'}</button>`).join('')}
         ${j.pdf && canUpload ? `<button class="sec" onclick="upload('${j.id}', this)">${j.uploaded ? '再上載 Drive' : '上載 Drive'}</button>` : ''}
         <button class="sec" onclick="toggleLog('${j.id}')">進度紀錄</button>
@@ -315,12 +318,13 @@ async function loadJobs() {
         ${j.status === 'failed' || j.status === 'cancelled' ? `<button class="sec" onclick="retryJob('${j.id}', this)">重做</button>` : ''}</div>
       <div class="log" id="log-${j.id}" ${openLog.has(j.id) ? '' : 'hidden'}></div></div>`;
   }).join('');
+  if (all.length > list.length) $('jobs').insertAdjacentHTML('beforeend', `<button class="sec" style="width:100%;margin-top:8px" onclick="jShow += 10; loadJobs()">顯示多 10 份（仲有 ${all.length - list.length} 份）</button>`);
   for (const id of openLog) fillLog(id);
   const nq = d.n_queued ?? d.jobs.filter(j => j.status === 'queued').length, nr = d.n_running ?? d.jobs.filter(j => j.status === 'running').length;
   $('qbar').hidden = !nq; $('qinfo').textContent = `做緊 ${nr} 份、排緊隊 ${nq} 份`;
   clearTimeout(timer); timer = setTimeout(loadJobs, d.jobs.some(j => j.status === 'running' || j.status === 'queued') ? 4000 : 30000);
 }
-let allJobs = [], shownFailed = [], jFilter = 'all';
+let allJobs = [], shownFailed = [], jFilter = 'all', jShow = 10;
 try { jFilter = localStorage.getItem('jfilter') || 'all'; } catch (e) {}
 const jobName = j => `${j.date} ${j.kind === 'stock' ? j.ticker : j.kind === 'amarket' ? (MKTN[j.ticker] || j.ticker) + '大盤' : '大盤'}`;
 async function retryJob(id, btn) {
@@ -334,6 +338,8 @@ $('rall').onclick = async () => {
   const go = todo.filter(j => !done.has(jobName(j)));
   if (!go.length) { alert('顯示中嘅失敗報告，之後都已經重做過或者做緊'); return; }
   if (!confirm(`重做 ${go.length} 份報告？（同一份已經有完成／做緊版本嘅會略過）\n${go.map(jobName).join('、')}\n\n估計 US$${go.length * 2}–${go.length * 8}。`)) return;
+  const typed = prompt(`第二次確認：會即刻重做 ${go.length} 份、收費約 US$${go.length * 2}–${go.length * 8}。\n真係要做就輸入 ${go.length}（其他輸入＝取消）：`);
+  if (String(typed || '').trim() !== String(go.length)) { alert('已取消，冇重做任何報告'); return; }
   let n = 0; for (const j of go) { try { await api(`/api/jobs/${j.id}/retry`, {method: 'POST', body: '{}'}); n++; } catch (e) {} }
   alert(`已重新排咗 ${n} 份`); loadJobs();
 };
