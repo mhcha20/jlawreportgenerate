@@ -47,6 +47,8 @@
 - Grok 每份去到 US$7–10：Grok（store:false）每輪重送成段對話連截圖，`inspect_data` 用 12 次就貴好多。已改：Grok 最多 3 次（`INSPECT_MAX_GROK`）。之後量一份睇返用量。
 
 ## 要記住嘅坑
+- **Yahoo 價格比例錯誤**（2026-11-06 日本報告 AI 發現）：1321 10/05–06 收 7.28／7.35（正常約 710，量大 100 倍）、1306 03/30–31 收 37.6（細 10 倍）；`/api/ohlcv`（報告中心）原樣傳出。`gen/amarket/prep.py fix_scale()` 同前後 5 根中位數比、接近 10 嘅次方就還原並寫 warn。掃過 115 隻個股同美股／港韓大盤數據冇其他（BMNR 2025-06 係真實急升）。報告中心 `prices.js`／`mergeOhlcv` 未修（個股 prep、推介、回測都用佢），要喺 Jlaw-report 改先根治。
+- **Yahoo 指數收市後 close＝null**（2026-11-06 ^N225）：`gen/amarket/prep.py yahoo_index` 用 `regularMarketPrice` 補（`regularMarketTime` ≥ 開市 6.4 小時後），同報告中心 `fillMissingClose` 一樣。
 - 部署（push 或者改 Railway Variables）會中斷做緊嘅 job；出緊報告就唔好部署。
 - `gen/market/data` 係共用目錄，大盤 job 一定要一次一份（`MARKET_LOCK`）。
 - Grok 嘅 Responses API 喺有圖嘅情況要 `store:false`，所以每輪重送全部對話（19 張圖），輸入 token 會多。

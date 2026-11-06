@@ -27,16 +27,37 @@ def yahoo_index(sym):
             req = urllib.request.Request(f'https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?range=2y&interval=1d',
                                          headers={'User-Agent': 'Mozilla/5.0 (jlawreportgenerate)'})
             with urllib.request.urlopen(req, timeout=60) as r: j = json.load(r)['chart']['result'][0]
-            q, off = j['indicators']['quote'][0], j['meta'].get('gmtoffset', 0)
+            q, off, meta = j['indicators']['quote'][0], j['meta'].get('gmtoffset', 0), j['meta']
             rows = []
             for i, ts in enumerate(j['timestamp']):
                 c = q['close'][i]
+                if c is None and i == len(j['timestamp']) - 1 and meta.get('regularMarketPrice') and (meta.get('regularMarketTime') or 0) >= ts + 6.4 * 3600:
+                    # Yahoo 收市後最後一根 close 間中係 null（2026-11-06 ^N225），已收市就用 regularMarketPrice 補（同報告中心 fillMissingClose 一樣）
+                    c = meta['regularMarketPrice']
+                    q['high'][i] = max(x for x in (q['high'][i], c) if x is not None); q['low'][i] = min(x for x in (q['low'][i], c) if x is not None)
                 if c is None: continue
                 d = dt.datetime.fromtimestamp(ts + off, dt.timezone.utc).date().isoformat()
                 rows.append(dict(d=d, o=q['open'][i] or c, h=q['high'][i] or c, l=q['low'][i] or c, c=c, v=q['volume'][i] or 0))
             return rows
         except Exception as e: last = e
     raise last
+
+
+def fix_scale(rows):
+    """Yahoo 間中有幾日價格細咗／大咗 10、100、1000 倍（2026-11-06 發現：1321 10/05–06 收 7.28／7.35，正常約 710；
+    1306 03/30–31 收 37.6／37.1，正常約 383；成交量反方向放大），會搞亂 MA50／MA200／52 週高同 50 日均量。
+    同前後各 5 根收市中位數比，比例接近 10 嘅次方（±10%）就將開高低收乘返、成交量除返。回傳修正咗嘅日期 list。"""
+    import statistics
+    fixed = []
+    for i, x in enumerate(rows):
+        nb = [r['c'] for r in rows[max(0, i - 5):i] + rows[i + 1:i + 6] if r.get('c')]
+        if len(nb) < 4 or not x.get('c'): continue
+        k = statistics.median(nb) / x['c']
+        for f in (10, 100, 1000, 0.1, 0.01, 0.001):
+            if abs(k / f - 1) <= 0.10:
+                for key in ('o', 'h', 'l', 'c'): x[key] = x[key] * f
+                x['v'] = x['v'] / f; fixed.append(f'{x["d"]}×{f:g}'); break
+    return fixed
 
 
 def main():
@@ -62,6 +83,8 @@ def main():
             warn.append(f'{t} 已用 --extra 補入 {sorted(em)}：報告第二節要註明來源')
         if not rows or rows[-1]['d'] != date:
             missing.append({'t': t, 'err': f'最後一根 {rows[-1]["d"] if rows else None} ≠ {date}'}); continue
+        fx = fix_scale(rows)
+        if fx: warn.append(f'{t} Yahoo 日線有價格比例錯誤，已還原（價×倍數、量÷倍數）：{"、".join(fx)}；報告第二節要註明')
         if t not in extra and rows[-1].get('fa', '9') < close_utc:
             sys.exit(f'{t} {date} 嘅 bar 係盤中攞（fa={rows[-1].get("fa")} < 收市後 {close_utc}），唔可以用；收市後再跑')
         if len(rows) < 210: warn.append(f'{t} 只有 {len(rows)} 根日線，MA200 唔可靠')
