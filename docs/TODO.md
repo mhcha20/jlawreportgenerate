@@ -15,6 +15,8 @@
 
 - [ ] **Gemini 比較**（2026-11-06 加）：睇部署 log 有冇 `gemini OK`（原生 API＋Google 搜尋喺 cloud session 測唔到，要喺 Railway 驗證）；之後同一隻股票／同一日用 Gemini 同 Grok 各出一份，比較 QA／擋位重試次數、數字準唔準同用量，再決定日常用邊個。Gemini 價錢係估計（`GEMINI_PRICE_*`），要喺 Google AI Studio／Cloud Billing 對賬；網上資料話 gemini-4-argon 2026-11-30 後加價（$4／$20）。
 
+- [ ] **Gemini 第一批結果**（2026-11-06，全部 11/05、gemini-4-argon）：FPS 3 次 build 約 US$1.35（Grok 9 次 US$7.93，結論相同）；XLV 3 次約 US$1.10；SPCX 11 次約 US$4.71（第 2–8 次本體 11 頁刪唔夠，第 9 次過咗仲交多兩次）。快取有效（後期每輪 >85% 快取）。之後加咗：超頁數時話 AI 刪幾多字＋最長欄位、Gemini 篇幅提醒、過咗 QA 最多再改 1 次（`POST_SUCCESS_BUILDS`）。下一批睇 build 次數有冇跌。
+
 ## 用戶提過、可以做
 - [ ] **報告中心「📸 截圖檢查」日期**：只加香港「當日」，過咗午夜就睇唔到上一個亞洲交易日（例如 11/06 凌晨睇唔到 11/05）。改法同本站 `jlaw.stock_dates()`（加最近幾個工作日）。要喺 Jlaw-report 開 PR 俾用戶 merge。
 - [ ] **XLV 2026-11-04 要重出**：Grok 出咗 76 分 ★★★ 觀察，按新評等規則應該係 ★★★★ 值得買入。

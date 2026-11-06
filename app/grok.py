@@ -148,6 +148,7 @@ def run(job, system, content):
                 inp.append({'type': 'function_call_output', 'call_id': c['call_id'], 'output': text})
             if imgs: inp.append({'role': 'user', 'content': [{'type': 'input_text', 'text': 'build 成功後嘅每頁縮圖（對照格式範本檢查版面）：'}] + imgs})
             if job.builds >= int(os.environ.get('MAX_BUILDS', '10')) and not job.pdf: raise RuntimeError(f'build 試咗 {job.builds} 次都未過 QA／格式擋位，停止')
+            if job.done_revising(): return
             continue
         if job.pdf:
             job.log(f'完成（Grok；上網搜尋共 {searches} 次）：' + msg[:400]); return

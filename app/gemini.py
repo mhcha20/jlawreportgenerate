@@ -175,6 +175,7 @@ def run(job, system, content):
                 msgs.append({'role': 'tool', 'tool_call_id': c['id'], 'content': text})
             if imgs: msgs.append({'role': 'user', 'content': [{'type': 'text', 'text': 'build 成功後嘅每頁縮圖（對照格式範本檢查版面）：'}] + imgs})
             if job.builds >= int(os.environ.get('MAX_BUILDS', '10')) and not job.pdf: raise RuntimeError(f'build 試咗 {job.builds} 次都未過 QA／格式擋位，停止')
+            if job.done_revising(): return
             continue
         if job.pdf:
             job.log('完成（Gemini）：' + (msg.get('content') or '')[:400]); return

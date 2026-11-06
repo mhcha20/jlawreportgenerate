@@ -277,6 +277,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
                 results = [s.tool(b) for b in uses]
                 msgs.append({'role': 'user', 'content': results})
                 if s.builds >= MAX_BUILDS and not s.pdf: raise RuntimeError(f'build 試咗 {s.builds} 次都未過 QA，停止')
+                if s.done_revising(): return
                 continue
             if resp.stop_reason == 'max_tokens':
                 msgs.append({'role': 'user', 'content': '回覆被截斷。請重新用 build_report 提交完整 work 檔（精簡敘述）。'}); continue
@@ -287,6 +288,12 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
             if idle >= 3: raise RuntimeError('Claude 連續 3 次冇提交 work 檔，停止')
             msgs.append({'role': 'user', 'content': '未有成功嘅 PDF。請用 build_report 提交完整 work 檔。'})
         raise RuntimeError('對話輪數用晒都未出到 PDF')
+
+    def done_revising(s):
+        """過咗 QA 之後最多再改 POST_SUCCESS_BUILDS 次（默認 1），之後用最新一版收尾，唔再收費（SPCX 2026-11-06 過咗仲交多兩次）"""
+        if s.pdf and getattr(s, 'post_builds', 0) >= int(os.environ.get('POST_SUCCESS_BUILDS', '1')):
+            s.log(f'已有過 QA 嘅版本，過咗之後再改咗 {s.post_builds} 次，停止並用最新一版'); return True
+        return False
 
     def call(s, client, system, msgs):
         s.log('Claude 分析中…')
@@ -312,6 +319,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         if b.name == 'inspect_data': return s.inspect(b)
         if b.name != 'build_report' or not isinstance(b.input, dict) or not isinstance(b.input.get('work_py'), str) or 'def spec' not in b.input['work_py']:
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'INVALID_INPUT：要用 build_report，work_py 係完整 Python 源碼（有 spec／texts／qa）'}
+        if s.pdf: s.post_builds = getattr(s, 'post_builds', 0) + 1   # 已經有過 QA 嘅版本之後再改
         s.builds += 1
         wp = os.path.join(s.dir, f'work_{s.builds}.py'); open(wp, 'w', encoding='utf-8').write(b.input['work_py'])
         s.log(f'第 {s.builds} 次 build…')
