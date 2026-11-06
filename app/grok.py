@@ -3,7 +3,7 @@
 流程同 Claude 版一樣：睇 19 張圖 → 上網核實 → 寫 work 檔 → build_report 跑 QA＋格式擋位 → 失敗改好再交。
 環境變數：XAI_API_KEY（必須）、XAI_MODEL（默認 grok-4.7）、XAI_BASE（默認 https://api.x.ai/v1）、XAI_REASONING（選填：low／medium／high）、
 XAI_PRICE_IN／XAI_PRICE_OUT（美元／百萬 token，默認 grok-4.7 嘅 2／6，只用嚟估用量；上網搜尋另計，未包）。"""
-import json, os, time, types, urllib.error, urllib.request
+import http.client, json, os, time, types, urllib.error, urllib.request
 
 BASE = os.environ.get('XAI_BASE', 'https://api.x.ai/v1').rstrip('/')
 MODEL = os.environ.get('XAI_MODEL', 'grok-4.7')
@@ -72,7 +72,7 @@ def _post(body, log, cancel=lambda: None):
             if e.code in (429, 500, 502, 503, 504) and attempt < 3:
                 log(f'⚠ Grok API {e.code}，{20 * (attempt + 1)} 秒後重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'Grok API {e.code}：{msg}')
-        except (urllib.error.URLError, TimeoutError, ConnectionError, RuntimeError) as e:
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException, RuntimeError) as e:   # IncompleteRead＝串流中途斷線
             if isinstance(e, RuntimeError) and '中斷' not in str(e): raise
             if attempt < 3: log(f'⚠ Grok 連線問題（{e}），重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'連唔到 Grok：{e}')

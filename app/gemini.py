@@ -8,7 +8,7 @@
 環境變數：GEMINI_API_KEY（必須）、GEMINI_MODEL（默認 gemini-4-argon）、GEMINI_SEARCH_MODEL（上網核實用，默認同 GEMINI_MODEL）、
 GEMINI_REASONING（選填 low／medium／high）、GEMINI_PRICE_IN／OUT／CACHED（美元／百萬 token，只用嚟估用量，默認 2／10／0.2；
 以 Google AI Studio 帳單為準；上網核實（grounding）每次請求另計，未包）。"""
-import json, os, time, types, urllib.error, urllib.request
+import http.client, json, os, time, types, urllib.error, urllib.request
 
 BASE = 'https://generativelanguage.googleapis.com/v1beta'
 MODEL = os.environ.get('GEMINI_MODEL', 'gemini-4-argon')
@@ -52,7 +52,7 @@ def _retry(fn, log, what):
             if e.code in (429, 500, 502, 503, 504) and attempt < 3:
                 log(f'⚠ Gemini {what} {e.code}，{20 * (attempt + 1)} 秒後重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'Gemini {what} {e.code}：{msg}')
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException) as e:   # IncompleteRead＝串流中途斷線
             if attempt < 3: log(f'⚠ Gemini {what} 連線問題（{e}），重試'); time.sleep(20 * (attempt + 1)); continue
             raise RuntimeError(f'連唔到 Gemini：{e}')
 
