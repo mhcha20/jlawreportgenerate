@@ -3,7 +3,7 @@ Drive 截圖 → 行情（gen/prep.py）→ 上一份報告＋當日大盤報告
 流程規則照 docs/WORKER.md（排程 Claude session 用嘅版本）。"""
 import datetime as dt, glob, json, os, subprocess, sys
 from zoneinfo import ZoneInfo
-import agent, jlaw
+import agent, jlaw, longbridge as lb
 from agent import GEN, _read, img_block
 
 FORMAT_REF_STOCK = os.environ.get('FORMAT_REF_STOCK', '2026-10-30_ESTC_')   # 個股格式範本（用戶 2026-11-05 指定）：Drive 檔名前綴，攞行動卡／股票分析終極報告／核對附錄三份
@@ -23,7 +23,7 @@ build 會擋：work 檔冇 TODO、今日動作 ≤40 字、朗讀稿字數、行
 - 評分、價位、形態判斷要參考 J Law 方法筆記（VCP、拉回買入、S&R、趨勢線、均線、見頂見底訊號）。
 - S['ai_line'] 寫「AI：<模型識別碼>，直接閱讀截圖圖像。」
 
-=== WORKER.md（流程；drive.py／prep.py／build.py／上載嘅步驟網站已經代你做，Longbridge 核實今次冇，notes 寫「冇 Longbridge 核實」）===
+=== WORKER.md（流程；drive.py／prep.py／build.py／上載嘅步驟網站已經代你做，Longbridge 核實（收市核對、補 bar、下次業績日）網站已經代你做，結果喺 user 訊息「Longbridge 核實」一段；嗰段話冇就 notes 寫「冇 Longbridge 核實」）===
 {_read('docs/WORKER.md')}
 
 === JLaw × MYT 股票分析終極指令 V2.0 ===
@@ -91,11 +91,23 @@ class StockJob(agent.Job):
         for f in sh['files']: open(os.path.join(sd, f['name']), 'wb').write(jlaw.download(f['id']))
         s.log(f'已下載 {len(sh["files"])} 張截圖（{sh["kind"]} 版面）')
         subprocess.run([sys.executable, os.path.join(GEN, 'prep.py'), 'images', t, sd], capture_output=True, text=True, timeout=300)
+        lbs, lbmsg = None, ''
+        if not lb.symbol(t): lbmsg = '今次冇 Longbridge 核實（日股／韓股 Longbridge 直連未驗證，照舊用 Yahoo＋截圖）'
+        elif not lb.enabled(): lbmsg = '今次冇 Longbridge 核實（網站未設定 Longbridge 金鑰）'
+        else:
+            try: lbs = lb.daily_bars(t, 5); s.log('Longbridge 日線：' + '、'.join(sorted(lbs)))
+            except lb.LBError as e: lbmsg = f'今次冇 Longbridge 核實（連唔到：{e}）'; s.log('⚠ ' + lbmsg)
         s.log('攞行情（jlaw-report /api/ohlcv）…')
-        p = subprocess.run([sys.executable, os.path.join(GEN, 'prep.py'), 'data', t, date], capture_output=True, text=True, timeout=300,
-                           cwd=GEN, env={**os.environ, 'JLAW_SITE': jlaw.SITE})
+        def prep_data(*extra):
+            return subprocess.run([sys.executable, os.path.join(GEN, 'prep.py'), 'data', t, date, *extra], capture_output=True, text=True, timeout=300,
+                                  cwd=GEN, env={**os.environ, 'JLAW_SITE': jlaw.SITE})
+        p, lb_filled = prep_data(), False
+        if p.returncode != 0 and '≠ 報告日' in (p.stderr + p.stdout) and lbs and date in lbs:   # Yahoo 缺當日 bar（例如亞洲股收市價 null）→ 用 Longbridge 補
+            s.log(f'Yahoo 未有 {date} 收市 bar，用 Longbridge 補')
+            p, lb_filled = prep_data('--extra', json.dumps([lbs[date]])), True
         if p.returncode != 0: raise RuntimeError('行情準備失敗：' + (p.stderr or p.stdout)[-1200:])
         s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200])
+        lbtxt = s.lb_verify(t, date, lbs, lbmsg, lb_filled)
         summary = metrics_summary(t, date)
         try: prior = jlaw.prior_stock(t, date)
         except Exception as e: prior = {}; s.log(f'⚠ 讀唔到上一份報告：{e}')
@@ -128,13 +140,36 @@ class StockJob(agent.Job):
 行情已準備好（data/{t}_{date}.json），以下係 metrics(t) 重算摘要（work 檔用 m 取值，唔好照抄寫死）：
 {json.dumps(summary, ensure_ascii=False)}
 
+Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三節同 notes）：
+{lbtxt}
+
 上一份報告（用嚟寫 prior／biggest／vsprior；先核對佢嘅日期同收市價）：{ptxt or '（冇，首份）'}
 
 當日大盤報告（市場配合構面、R4 第一項、mkt_state／mkt_ref）：{mname or '（冇' + ('，亞洲股只用圖面指數' if sh['kind'] == 'ASIA' else '') + '）'}
 {mtxt[:30000]}
 
-請：①逐張睇晒截圖抄讀數；②用 web_search 核實下次財報日、近期新聞／催化劑、分析員評級（附來源同日期）；③九構面逐格評分寫理由、A／B 路徑價位、減倉／離場、今日動作；④寫完整 work 檔（spec／texts／qa），用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結（評等、分數、今日動作）收尾。"""})
+請：①逐張睇晒截圖抄讀數；②下次財報日：上面 Longbridge 有就用佢（註明來源 Longbridge 財經日曆，以公司公告為準），冇先用 web_search 核實；用 web_search 核實近期新聞／催化劑、分析員評級（附來源同日期）；③九構面逐格評分寫理由、A／B 路徑價位、減倉／離場、今日動作；④寫完整 work 檔（spec／texts／qa），用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結（評等、分數、今日動作）收尾。"""})
         return s.analyze(stock_system(ref), content)
+
+    def lb_verify(s, t, date, lbs, lbmsg, lb_filled):
+        """Longbridge 收市核實＋下次業績日 → 俾 AI 嘅一段文字（失敗唔會令報告失敗）"""
+        if lbs is None: return lbmsg + '。notes 要寫「冇 Longbridge 核實」。'
+        lines = []
+        if lb_filled: lines.append(f'{date} OHLCV 來源係 Longbridge（Yahoo 未有當日收市 bar），附錄第三節要註明。')
+        elif date not in lbs: lines.append(f'收市核實：Longbridge 未有 {date} 嗰根（有：{"、".join(sorted(lbs))}），今次未能核實收市。')
+        else:
+            try:
+                b = json.load(open(os.path.join(GEN, 'data', f'{t}_{date}.json')))['bars'][-1]   # [MM-DD,o,h,l,c,v千股]
+                ok, txt = lb.compare(lbs[date], dict(o=b[1], h=b[2], l=b[3], c=b[4], v=b[5] * 1000))
+                lines.append(('收市核實：一致。' if ok else '收市核實：⚠ 不一致，附錄第三節要並列兩邊數字並查日期／復權。') + txt)
+                s.log('Longbridge 收市核實：' + ('一致' if ok else '⚠ 不一致'))
+            except Exception as e: lines.append(f'收市核實：比對失敗（{e}）。')
+        try:
+            er = lb.next_earnings(t, date)
+            lines.append(f'下次業績日：{er[0]}（{er[1]}；來源 Longbridge 財經日曆，以公司公告為準）' if er else '下次業績日：Longbridge 財經日曆 45 日內查唔到（可以用 web_search 核實，查唔到先標「未公布」）')
+            s.log('Longbridge 業績日：' + (er[0] if er else '45 日內冇'))
+        except lb.LBError as e: lines.append(f'下次業績日：Longbridge 查詢失敗（{e}），用 web_search 核實'); s.log(f'⚠ Longbridge 業績日查詢失敗：{e}')
+        return '\n'.join(lines)
 
     def inspect_prelude(s):
         return (GEN, f"import sys, os; sys.path.insert(0, {GEN!r}); os.chdir({GEN!r}); os.environ['JL_DATE'] = {s.date!r}\nfrom lib import *\nfrom gen import *\nm = metrics({s.ticker!r})")

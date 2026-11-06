@@ -5,7 +5,7 @@ import datetime as dt, hmac, json, os, queue, re, threading, time, traceback, uu
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote
 from zoneinfo import ZoneInfo
-import jlaw, auth
+import jlaw, auth, longbridge
 
 
 def now_iso(): return dt.datetime.now(dt.timezone.utc).isoformat()
@@ -242,6 +242,10 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
+        if p == '/api/longbridge':   # Longbridge 連線狀態（攞 NVDA.US 報價）
+            if not longbridge.enabled(): return s._send(200, {'ok': False, 'msg': '未設定 Longbridge 金鑰'})
+            try: return s._send(200, {'ok': True, 'msg': longbridge.check()})
+            except longbridge.LBError as e: return s._send(200, {'ok': False, 'msg': str(e)})
         if p == '/api/dates':
             try:
                 md = [d for d, _ in jlaw.date_folders()[:30]]; sd, sdef = jlaw.stock_dates(md)
@@ -311,6 +315,11 @@ def main():
             j['status'] = 'failed'; j['error'] = '伺服器重新啟動，job 中斷；請再撳一次'; save(j)
     for _ in range(max(1, int(os.environ.get('WORKERS', '2')))): threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=scheduler, daemon=True).start()
+    def lb_selftest():
+        if not longbridge.enabled(): print('longbridge: 未設定金鑰', flush=True); return
+        try: print('longbridge OK:', longbridge.check(), flush=True)
+        except longbridge.LBError as e: print('longbridge 連唔到:', e, flush=True)
+    threading.Thread(target=lb_selftest, daemon=True).start()
     port = int(os.environ.get('PORT', '8080'))
     print('listening', port, 'data', DATA, flush=True)
     ThreadingHTTPServer(('0.0.0.0', port), H).serve_forever()

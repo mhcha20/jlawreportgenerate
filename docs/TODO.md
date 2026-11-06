@@ -9,6 +9,8 @@
 
 - [ ] **MYT 筆記擴充版**（2026-11-06）：`docs/jlaw-method-notes.md` 按原文逐頁重整（約 2 萬 → 4.4 萬 bytes，加原文頁數、圖例、第 15 節報告應用對照）。睇下一批報告有冇更多引用 J Law 規則（出貨日、VCP 收縮數、拉回八點、止損 8%）；Grok 每輪重送 system prompt，每份約多 US$0.1–0.2。
 
+- [ ] **Longbridge 直連**（2026-11-06 加）：睇部署 log 有冇 `longbridge OK:`；之後出一份美股＋一份港股報告，睇收市核實、業績日有冇寫入附錄。Access Token 有期限，過期要喺 Longbridge 開發者後台續期再改 Railway Variables（報告中心嗰組都要改）。大盤報告未接（可以用嚟核實 SPY／QQQ／IWM 收市）。
+
 ## 用戶提過、可以做
 - [ ] **報告中心「📸 截圖檢查」日期**：只加香港「當日」，過咗午夜就睇唔到上一個亞洲交易日（例如 11/06 凌晨睇唔到 11/05）。改法同本站 `jlaw.stock_dates()`（加最近幾個工作日）。要喺 Jlaw-report 開 PR 俾用戶 merge。
 - [ ] **XLV 2026-11-04 要重出**：Grok 出咗 76 分 ★★★ 觀察，按新評等規則應該係 ★★★★ 值得買入。
@@ -19,7 +21,6 @@
 - [ ] 「只出行動卡」模式（平啲、快啲）：Jlaw-report 有 `build.py --card`／`template_card.py`／`WORKER_CARD.md`，本站未開放。
 - [ ] 每日跨股總表（Jlaw-report `tools/stockreport/daily.py`）未搬過嚟。
 - [ ] 個股報告加 J Law 觀點（而家只有大盤報告用 J Law 材料）。
-- [ ] Longbridge 收市核實／財報日（Jlaw-report `lbcheck.py`）本站冇；而家財報日靠 AI 上網搜尋。
 - [ ] 部署時嘅 502：Railway 切換新 container 嗰幾秒前端會 502；可以喺前端遇到 502 自動等幾秒重試，或者顯示「伺服器重新啟動中」。
 - [ ] 格式擋位門檻（`gen/market/format_check.py`、`gen/format_stock.py`）按實際出咗嘅報告再調；太嚴會令 AI 試好多次（每次都收費）。
 
