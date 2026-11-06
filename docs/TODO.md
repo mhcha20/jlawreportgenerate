@@ -9,7 +9,7 @@
 
 - [ ] **MYT 筆記擴充版**（2026-11-06）：`docs/jlaw-method-notes.md` 按原文逐頁重整（約 2 萬 → 4.4 萬 bytes，加原文頁數、圖例、第 15 節報告應用對照）。睇下一批報告有冇更多引用 J Law 規則（出貨日、VCP 收縮數、拉回八點、止損 8%）；Grok 每輪重送 system prompt，每份約多 US$0.1–0.2。
 
-- [ ] **Longbridge 直連**（2026-11-06 加）：睇部署 log 有冇 `longbridge OK:`；之後出一份美股＋一份港股報告，睇收市核實、業績日有冇寫入附錄。Access Token 有期限，過期要喺 Longbridge 開發者後台續期再改 Railway Variables（報告中心嗰組都要改）。大盤報告未接（可以用嚟核實 SPY／QQQ／IWM 收市）。
+- [ ] **Longbridge 直連**（2026-11-06 加）：睇部署 log 有冇 `longbridge OK:`；之後出一份美股＋一份港股報告，睇收市核實、業績日有冇寫入附錄。Access Token 有期限，過期要喺 Longbridge 開發者後台續期再改 Railway Variables（報告中心嗰組都要改）。2026-11-06 部署 log `longbridge OK`；大盤報告亦已接（15 隻 ETF 收市核實＋補 bar），睇下一份大盤報告第二節有冇寫。
 
 ## 用戶提過、可以做
 - [ ] **報告中心「📸 截圖檢查」日期**：只加香港「當日」，過咗午夜就睇唔到上一個亞洲交易日（例如 11/06 凌晨睇唔到 11/05）。改法同本站 `jlaw.stock_dates()`（加最近幾個工作日）。要喺 Jlaw-report 開 PR 俾用戶 merge。

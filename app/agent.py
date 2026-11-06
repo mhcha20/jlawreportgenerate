@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 import anthropic
 from PIL import Image
 import jlaw
+import longbridge as lb
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEN = os.path.join(ROOT, 'gen')
@@ -47,7 +48,7 @@ build 有格式擋位（format_check）：任何一節少過範本水平都會�
 - work 檔只可以 import mlib（`from mlib import *`）同 Python 標準庫；唔好讀寫檔案、唔好上網、唔好 subprocess。
 - 唔好出現「群組執行規則」相關句子。
 
-=== WORKER_MARKET.md（流程，照做；入面講 drive.py／prep.py／build.py 嘅步驟網站已經代你做咗）===
+=== WORKER_MARKET.md（流程，照做；入面講 drive.py／prep.py／build.py 同 Longbridge 收市核實（lbcheck.py）嘅步驟網站已經代你做咗，Longbridge 結果喺 user 訊息「Longbridge 核實」一段）===
 {_read('docs/WORKER_MARKET.md')}
 
 === JW 大盤分析指令 V1.0 ===
@@ -142,9 +143,26 @@ class Job:
         s.log(f'已下載 19 張截圖（{sh["name"]}）')
         # 2. 行情
         s.log('攞行情（jlaw-report /api/ohlcv）…')
-        p = subprocess.run([sys.executable, os.path.join(GEN, 'market', 'prep.py'), date], capture_output=True, text=True, timeout=600,
-                           env={**os.environ, 'JLAW_SITE': jlaw.SITE})
+        def prep(*extra):
+            return subprocess.run([sys.executable, os.path.join(GEN, 'market', 'prep.py'), date, *extra], capture_output=True, text=True, timeout=600,
+                                  env={**os.environ, 'JLAW_SITE': jlaw.SITE})
+        p, lbfill, lbmsg = prep(), {}, ''
+        if not lb.enabled(): lbmsg = '今次冇 Longbridge 核實（網站未設定 Longbridge 金鑰）'
+        else:
+            try:   # Yahoo 缺 DATE 收市 bar 嘅 ETF → 用 Longbridge 補，再跑一次
+                meta = json.load(open(os.path.join(GEN, 'market', 'data', '_meta.json')))
+                need = [m_['t'] for m_ in meta.get('missing', []) if '≠' in m_.get('err', '')] if meta.get('date') == date else []
+            except Exception: need = []
+            for t in need:
+                try:
+                    b = lb.daily_bars(t, 5)
+                    if b and date in b: lbfill[t] = [b[date]]
+                except lb.LBError as e: lbmsg = f'今次冇 Longbridge 核實（連唔到：{e}）'; break
+            if lbfill:
+                s.log(f'Yahoo 未有 {date} 收市 bar：{"、".join(lbfill)}，用 Longbridge 補')
+                p = prep('--extra', json.dumps(lbfill))
         if p.returncode != 0: raise RuntimeError('行情準備失敗：' + (p.stderr or p.stdout)[-1500:])
+        lbtxt = s.lb_verify(date, lbfill, lbmsg)
         summary = data_summary(date)
         s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200])
         # 3. 上一份報告
@@ -179,10 +197,36 @@ class Job:
 上一份大盤報告：{pname or '無'}
 {ptxt[:40000] if ptxt else '（冇上一份，第一份）'}
 
+Longbridge 核實（網站直連 Longbridge OpenAPI 代做；結果寫入第二節資料來源，例：「SPY／QQQ／IWM 收市同 Longbridge 一致」，不一致就並列兩邊數字）：
+{lbtxt}
+
 J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝發布日期，只用 ≤ 分析交易日嘅）：{jtxt or '（冇）'}
 
 請：①逐張睇晒 19 張圖抄讀數；②同上一份報告比較（包括廣度線係咪停滯）；③用 web_search 核實過去 5 個交易日催化劑同未來一星期美國經濟數據／重要業績日程；④格式要硬性跟足系統提示入面嘅格式範本（每節篇幅同範本一樣詳細）；有 J Law 材料就寫 jlaw_html；⑤寫完整 work 檔，用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結今日市況分類收尾。"""})
         return s.analyze(system_prompt(s.ref_name, s.ref_txt), content)
+
+    def lb_verify(s, date, lbfill, lbmsg):
+        """大盤 ETF（SPY／QQQ／IWM／板塊／SMH）收市同 Longbridge 比對 → 俾 AI 嘅一段文字；失敗唔會令報告失敗"""
+        if lbmsg: s.log('⚠ ' + lbmsg); return lbmsg + '。第二節照舊寫 Yahoo＋截圖，收尾警告「⚠ 今次冇 Longbridge 核實」。'
+        lines = [f'{t} {date} OHLCV 來源係 Longbridge（Yahoo 未有當日收市 bar），第二節要註明。' for t in lbfill]
+        try: have = json.load(open(os.path.join(GEN, 'market', 'data', '_meta.json')))['have']
+        except Exception as e: return f'今次冇 Longbridge 核實（讀唔到行情檔：{e}）'
+        ok_list, bad, skip = [], [], []
+        for t in [x for x in have if x not in lbfill]:
+            try:
+                b = lb.daily_bars(t, 5)
+                if not b or date not in b: skip.append(t); continue
+                r = json.load(open(os.path.join(GEN, 'market', 'data', f'{t}.json')))['rows'][-1]
+                ok, txt = lb.compare(b[date], r)
+                (ok_list if ok else bad).append(t if ok else f'{t}：{txt}')
+            except lb.LBError as e:
+                s.log(f'⚠ Longbridge 核實中斷：{e}'); lines.append(f'Longbridge 核實中斷（{e}），未核實：{t} 及之後嘅標的'); break
+            except Exception as e: skip.append(f'{t}（{e}）')
+        if ok_list: lines.append(f'收市同 Longbridge 一致（開高低收差 ≤0.02 或 ≤0.05%）：{"、".join(ok_list)}。')
+        if bad: lines.append('⚠ 收市同 Longbridge 不一致（第二節並列兩邊數字，查日期／復權）：' + '；'.join(bad))
+        if skip: lines.append(f'Longbridge 未有 {date} 嗰根／未能比對：{"、".join(skip)}。')
+        s.log(f'Longbridge 大盤核實：一致 {len(ok_list)}、不一致 {len(bad)}、未比對 {len(skip)}' + (f'、補 bar {len(lbfill)}' if lbfill else ''))
+        return '\n'.join(lines) or '今次冇 Longbridge 核實'
 
     def analyze(s, system, content):
         if os.environ.get('ANTHROPIC_API_KEY'):
