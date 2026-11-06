@@ -66,9 +66,13 @@ def _vis(x):   # 欄位可見字數（去 HTML 標籤）
     if isinstance(x, (list, tuple)): return sum(_vis(v) for v in x)
     return len(re.sub(r'\s+', '', re.sub(r'<[^>]+>', '', str(x)))) if isinstance(x, str) else 0
 def _cut_hint(pages, limit):
-    tot = sum(_vis(v) for v in T.values()); need = int(tot * (pages - limit) / pages) + 300
-    top = sorted(((k, _vis(v)) for k, v in T.items()), key=lambda kv: -kv[1])[:10]
-    return (f'。texts 合共約 {tot:,} 字，要刪大約 {need:,} 字先夠（一次刪夠，唔好每次刪少少）；最長嘅欄位：'
+    import inspect
+    src = inspect.getsource(gen2.build_report)   # 只計本體報告用到嘅欄位（朗讀稿、附錄欄位刪咗都唔會少頁）
+    keys = set(re.findall(r"T\[['\"](\w+)['\"]\]", src)) | set(re.findall(r"T\.get\(['\"](\w+)['\"]", src))
+    body = {k: v for k, v in T.items() if k in keys}
+    tot = sum(_vis(v) for v in body.values()); need = int(tot * (pages - limit) / pages) + 300
+    top = sorted(((k, _vis(v)) for k, v in body.items()), key=lambda kv: -kv[1])[:10]
+    return (f'。本體報告用到嘅 texts 合共約 {tot:,} 字（唔計朗讀稿同附錄欄位），要刪大約 {need:,} 字先夠（一次刪夠，唔好每次刪少少）；本體最長嘅欄位：'
             + '、'.join(f'{k} {n:,}' for k, n in top) + '。刪重複嘅敘述，唔好刪到格式擋位最低字數以下')
 if res[jobs[0]['pdf']] != 1: die(f'行動卡 {res[jobs[0]["pdf"]]} 頁，要 1 頁：行動卡各格寫精簡啲（biggest／cost_tail／corr／foot 等）')
 if not CARD_ONLY and res[jobs[1]['pdf']] > 10: die(f'本體報告 {res[jobs[1]["pdf"]]} 頁，超過 10 頁' + _cut_hint(res[jobs[1]['pdf']], 10))
