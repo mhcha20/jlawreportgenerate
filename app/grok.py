@@ -152,7 +152,8 @@ def run(job, system, content):
             if job.done_revising(): return
             continue
         if job.pdf:
-            job.log(f'完成（Grok；上網搜尋共 {searches} 次）：' + msg[:400]); return
+            from agent import summary_text
+            job.log(f'完成（Grok；上網搜尋共 {searches} 次）：' + summary_text(msg)); return
         idle += 1
         if idle >= 3: raise RuntimeError('Grok 連續 3 次冇提交 work 檔，停止')
         inp.append({'role': 'user', 'content': '未有成功嘅 PDF。請用 build_report 工具提交完整 work 檔。'})

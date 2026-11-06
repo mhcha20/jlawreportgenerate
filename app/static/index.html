@@ -226,7 +226,7 @@ async function loadJobs() {
     return `<div class="job"><div class="hd"><b>${esc(j.date)} ${j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : '大盤報告'}</b><span class="st ${c}">${t}</span></div>
       <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'gemini' ? ' · Gemini' : j.engine === 'grok' ? (j.engine_pref === 'grok' ? ' · Grok' : ' · 後備 Grok') : j.engine === 'claude' ? ' · Claude' : j.engine_pref && j.engine_pref !== 'auto' ? ` · ${j.engine_pref === 'gemini' ? 'Gemini' : 'Grok'}` : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
       ${j.result ? `<div class="mute">${esc(j.result.rating)} ${esc(j.result.score)}／100 · ${esc(j.result.action)}</div>` : ''}
-      <div class="mute">${esc(String(j.error || j.last || '').replace(/[*#`]/g, '').slice(0, 220))}</div>
+      <div class="mute">${esc(String(j.error || j.last || '').replace(/\{\s*"(ticker|date|mode|status)"[\s\S]*$/, '').replace(/[*#`]/g, '').slice(0, 220))}</div>
       <div class="acts">${(j.pdfs && j.pdfs.length ? j.pdfs : (j.pdf ? [j.pdf] : [])).map((f, i) => `<button class="sec" onclick="openPdf('${j.id}', ${i})">${f.includes('行動卡') ? '行動卡' : f.includes('終極報告') ? '本體報告' : f.includes('核對附錄') ? '核對附錄' : '睇 PDF'}</button>`).join('')}
         ${j.pdf && canUpload && !j.uploaded ? `<button class="sec" onclick="upload('${j.id}', this)">上載 Drive</button>` : ''}
         <button class="sec" onclick="toggleLog('${j.id}')">進度紀錄</button>

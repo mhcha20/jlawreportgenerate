@@ -182,7 +182,8 @@ def run(job, system, content):
             if job.done_revising(): return
             continue
         if job.pdf:
-            job.log('完成（Gemini）：' + (msg.get('content') or '')[:400]); return
+            from agent import summary_text
+            job.log('完成（Gemini）：' + summary_text(msg.get('content') or '')); return
         idle += 1
         if idle >= 3: raise RuntimeError('Gemini 連續 3 次冇提交 work 檔，停止')
         msgs.append({'role': 'user', 'content': '未有成功嘅 PDF。請用 build_report 工具提交完整 work 檔。'})

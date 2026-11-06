@@ -119,6 +119,14 @@ class ClaudeRefused(Exception): pass
 class Cancelled(Exception): pass
 
 
+def summary_text(msg, n=400):
+    """AI 收尾訊息 → 網頁顯示用：刪走程式碼段、JSON（V2.0 收尾 JSON 摘要）同空行，只留中文總結"""
+    msg = re.sub(r'```.*?```', ' ', msg or '', flags=re.S)
+    msg = re.sub(r'\{\s*"(ticker|date|mode|status)".*', ' ', msg, flags=re.S)   # 收尾 JSON 由呢度開始，之後全部唔要
+    lines = [l.strip() for l in msg.splitlines() if l.strip() and not l.strip().startswith(('{', '}', '"'))]
+    return ' '.join(lines)[:n]
+
+
 def with_model(content, model):
     return [dict(b, text=b['text'].replace('{MODEL_ID}', model)) if b['type'] == 'text' else b for b in content]
 
@@ -284,7 +292,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
                 msgs.append({'role': 'user', 'content': '回覆被截斷。請重新用 build_report 提交完整 work 檔（精簡敘述）。'}); continue
             if s.pdf:
                 txt = ''.join(b.text for b in resp.content if b.type == 'text').strip()
-                s.log('完成：' + txt[:400]); return
+                s.log('完成：' + summary_text(txt)); return
             idle += 1
             if idle >= 3: raise RuntimeError('Claude 連續 3 次冇提交 work 檔，停止')
             msgs.append({'role': 'user', 'content': '未有成功嘅 PDF。請用 build_report 提交完整 work 檔。'})
