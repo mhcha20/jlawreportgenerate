@@ -19,7 +19,10 @@ PRICE_CACHED = float(os.environ.get('GEMINI_PRICE_CACHED', '0.2'))
 IDLE = int(os.environ.get('GEMINI_IDLE_TIMEOUT', '300'))
 MAX_TURNS = 40
 NOTE = ('（今次由 Google Gemini 做。上網核實已經由網站先做好，結果喺上面「上網核實（Google 搜尋）」一段，每項有來源網址；'
-        '用嗰段寫催化劑／日程，冇講到嘅標「未核實」，唔好補造。S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「由 Google Gemini 生成」。）')
+        '用嗰段寫催化劑／日程，冇講到嘅標「未核實」，唔好補造。S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「由 Google Gemini 生成」。'
+        '注意篇幅：過往 Gemini 第一次交成日超出上限（本體 11–12 頁、今日動作 >40 字、朗讀稿超字數），每超一次都要重做收費。'
+        'work 檔 texts 正文合共大約 2.5–3 萬字就夠（ESTC 範本篇幅），本體報告一定 ≤10 頁；今日動作 ≤40 字；script3 ≤950、scriptfull ≤3,500 字；'
+        '提交前自己用 len() 數一次。）')
 
 TOOLS = [{'type': 'function', 'function': {
             'name': 'inspect_data',
