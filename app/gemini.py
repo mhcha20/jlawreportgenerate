@@ -16,7 +16,7 @@ SEARCH_MODEL = os.environ.get('GEMINI_SEARCH_MODEL', MODEL)
 PRICE_IN = float(os.environ.get('GEMINI_PRICE_IN', '2'))
 PRICE_OUT = float(os.environ.get('GEMINI_PRICE_OUT', '10'))
 PRICE_CACHED = float(os.environ.get('GEMINI_PRICE_CACHED', '0.2'))
-IDLE = int(os.environ.get('GEMINI_IDLE_TIMEOUT', '300'))
+IDLE = int(os.environ.get('GEMINI_IDLE_TIMEOUT', '900'))   # Gemini 寫 work 檔前會靜靜思考 >5 分鐘先開始傳（2026-11-06 日本連續兩次 300 秒超時），所以 15 分鐘冇資料先當斷線
 MAX_TURNS = 40
 NOTE = ('（今次由 Google Gemini 做。上網核實已經由網站先做好，結果喺上面「上網核實（Google 搜尋）」一段，每項有來源網址；'
         '用嗰段寫催化劑／日程，冇講到嘅標「未核實」，唔好補造。S["meta"]["ai"] 寫上面嘅模型識別碼，ai_note 註明「由 Google Gemini 生成」。'
