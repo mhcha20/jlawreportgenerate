@@ -248,6 +248,13 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
+        if p == '/api/suggest':   # 今日值得出報告推介（唔用 AI）
+            d = (q.get('date') or [''])[0]
+            if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
+            try:
+                import suggest
+                return s._send(200, suggest.suggest(d))
+            except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/longbridge':   # Longbridge 連線狀態（攞 NVDA.US 報價）
             if not longbridge.enabled(): return s._send(200, {'ok': False, 'msg': '未設定 Longbridge 金鑰'})
             try: return s._send(200, {'ok': True, 'msg': longbridge.check()})

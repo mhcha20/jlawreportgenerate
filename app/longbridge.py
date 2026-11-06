@@ -102,3 +102,17 @@ def compare(lb, mine):
     vr = lb['v'] / mine['v'] if mine.get('v') else float('nan')
     parts.append(f'量 Longbridge {lb["v"]:,.0f}／Yahoo {mine["v"]:,.0f}（比 {vr:.2f}，口徑可能唔同，並列唔平均）')
     return ok, '；'.join(parts)
+
+
+def earnings_calendar(market, start, days=7):
+    """market（US／HK）由 start 起 days 個平日嘅業績日 → {Longbridge 代號: (日期, 類型)}。一日一次查詢，俾推介用。"""
+    from longport.openapi import CalendarCategory
+    out, day, n = {}, date.fromisoformat(start), 0
+    while n < days:
+        if day.weekday() < 5:
+            n += 1
+            for g in _call('cal', lambda c: c.finance_calendar(CalendarCategory.Report, day.isoformat(), day.isoformat(), market).list):
+                for i in g.infos: out.setdefault(i.symbol, (str(g.date), str(i.date_type)))
+            time.sleep(0.2)
+        day += timedelta(days=1)
+    return out

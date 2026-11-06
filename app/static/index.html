@@ -46,6 +46,10 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
 .srow select { width:auto; flex:0 0 auto; padding:6px 8px; font-size:14px; }
 .watch { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; padding:10px; border:1px dashed var(--line); border-radius:10px; }
 .watch #wlist { flex-basis:100%; font-size:12px; }
+.sg { flex-basis:100%; display:flex; flex-direction:column; gap:6px; }
+.sgr { border:1px solid var(--line); border-radius:8px; padding:6px 8px; cursor:pointer; font-size:13px; overflow-wrap:anywhere; }
+.sgr.on { border-color:var(--acc, #2563eb); background:rgba(37,99,235,.08); }
+.sgr .why { font-size:12px; color:var(--mute); }
 .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
 .chips button { background:transparent; color:var(--ink); border:1px solid var(--line); padding:5px 10px; font-size:13px; font-weight:500; border-radius:16px; }
 .chips button.on { background:var(--pri); color:#fff; border-color:var(--pri); }
@@ -113,6 +117,12 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
         <button id="wpick">⭐ 每日清單</button>
         <button class="sec" id="wsave">將而家剔咗嘅存做每日清單</button>
         <div class="mute" id="wlist"></div>
+      </div>
+      <div class="watch">
+        <button id="sgBtn">💡 推介今日值得出</button>
+        <label class="chk">頭 <select id="sgN"><option>5</option><option selected>10</option><option>15</option></select> 隻</label>
+        <button class="sec" id="sgPick" hidden>剔晒推介</button>
+        <div class="sg" id="sgList"><div class="mute">按上一張行動卡價位（順勢觸發／減倉／離場）同當日量價（MYT 方法）計分，唔用 AI、唔收費；分數只係排次序，唔係買賣建議。</div></div>
       </div>
       <div class="srow"><button class="sec" id="sall">揀晒顯示中截圖齊嘅</button><button class="sec" id="snone">清除</button></div>
       <div class="slist" id="slist"></div>
@@ -365,7 +375,7 @@ function drawStocks() {
 function pickGroup(t) { shown().filter(x => (x.theme || '未分類') === t && x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); }
 $('ssort').onchange = drawStocks;
 function pick(t, on) { on ? picked.add(t) : picked.delete(t); drawStocks(); }
-$('sfind').oninput = drawStocks; $('sreload').onclick = loadStocks; $('sdate').onchange = () => { picked.clear(); loadStocks(); };
+$('sfind').oninput = drawStocks; $('sreload').onclick = loadStocks; $('sdate').onchange = () => { picked.clear(); sugg = []; $('sgPick').hidden = true; $('sgList').innerHTML = '<div class="mute">日期改咗，再撳「💡 推介」</div>'; loadStocks(); };
 // 每日清單：一撳就剔晒（截圖未齊嘅會列出），剔完可以照改；改完撳「存做每日清單」
 let watch = [];
 async function loadWatch() { try { watch = (await api('/api/watchlist')).tickers; } catch (e) {} drawWatch(); }
@@ -389,6 +399,35 @@ $('wsave').onclick = async () => {
   if (!confirm(`將每日清單改做呢 ${ts.length} 隻？\n${ts.join('、')}`)) return;
   try { watch = (await api('/api/watchlist', {method: 'POST', body: JSON.stringify({tickers: ts})})).tickers; drawWatch(); $('sgoMsg').innerHTML = '<span class="ok">每日清單已更新</span>'; }
   catch (e) { alert('存唔到：' + e.message); }
+};
+// 推介：/api/suggest 用上一張行動卡價位＋當日量價計分（唔用 AI）
+let sugg = [];
+function drawSugg() {
+  const by = Object.fromEntries(stocks.map(x => [x.ticker, x])), n = +$('sgN').value;
+  const top = sugg.filter(x => x.points > 0).slice(0, 15);
+  if (!top.length) { $('sgList').innerHTML = '<div class="mute">今日冇特別值得出嘅（或者行情未更新）</div>'; $('sgPick').hidden = true; return; }
+  $('sgPick').hidden = false; $('sgPick').textContent = `剔晒推介頭 ${n} 隻`;
+  $('sgList').innerHTML = top.map((x, i) => {
+    const st = by[x.ticker] || {}, icon = x.kinds.includes('risk') && x.kinds.includes('opp') ? '🟡' : x.kinds.includes('risk') ? '🔴' : x.kinds.includes('opp') ? '🟢' : '⚪';
+    const done = st.done === 'site' ? ' · ✓已出' : st.done === 'drive' ? ' · ✓Drive' : st.done === 'busy' ? ' · 做緊' : '';
+    return `<div class="sgr${picked.has(x.ticker) ? ' on' : ''}" data-t="${esc(x.ticker)}">${i + 1}. ${icon} <b>${esc(x.ticker)}</b> ${esc(String(x.points))} 分 · ${x.chg > 0 ? '+' : ''}${esc(String(x.chg))}%${esc(done)}${i < n ? '' : ' <span class="mute">（頭 ' + n + ' 以外）</span>'}<div class="why">${esc(x.why.join('；'))}</div></div>`;
+  }).join('') + '<div class="mute">🟢 機會（升穿觸發、接近觸發、新高、收窄）· 🔴 風險（跌穿／貼近減倉、離場，持倉要處理）· 🟡 兩樣都有。撳一行剔／取消。' + (sugg.note ? esc(' ' + sugg.note) : '') + '</div>';
+  $('sgList').querySelectorAll('.sgr').forEach(el => el.onclick = () => { const t = el.dataset.t; picked.has(t) ? picked.delete(t) : picked.add(t); drawStocks(); drawSugg(); });
+}
+$('sgBtn').onclick = async () => {
+  const d = $('sdate').value; if (!d) return;
+  $('sgBtn').disabled = true; $('sgList').innerHTML = '<div class="mute">計緊（約 15–30 秒）…</div>';
+  try { const r = await api('/api/suggest?date=' + d); sugg = r.rows; sugg.note = r.note; drawSugg(); }
+  catch (e) { $('sgList').innerHTML = `<div class="bad">計唔到：${esc(e.message)}</div>`; }
+  $('sgBtn').disabled = false;
+};
+$('sgN').onchange = () => { if (sugg.length) drawSugg(); };
+$('sgPick').onclick = () => {
+  const by = Object.fromEntries(stocks.map(x => [x.ticker, x])), n = +$('sgN').value;
+  const top = sugg.filter(x => x.points > 0).slice(0, n);
+  const skip = top.filter(x => ['site', 'busy'].includes((by[x.ticker] || {}).done)), ok = top.filter(x => (by[x.ticker] || {}).status === 'ok' && !skip.includes(x));
+  ok.forEach(x => picked.add(x.ticker)); drawStocks(); drawSugg();
+  $('sgoMsg').innerHTML = `<span class="ok">已剔推介頭 ${n} 隻入面 ${ok.length} 隻</span>` + (skip.length ? `<span class="warn">；${esc(skip.map(x => x.ticker).join('、'))} 今日已出／做緊，冇剔</span>` : '');
 };
 $('sall').onclick = () => { shown().filter(x => x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); };
 $('snone').onclick = () => { picked.clear(); drawStocks(); };
