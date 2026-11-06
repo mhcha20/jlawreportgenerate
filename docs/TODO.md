@@ -13,6 +13,8 @@
 
 - [ ] **慳費用改動**（2026-11-06）：Grok 第一次提交 work 檔之後唔再重送截圖、舊版 work 檔、舊 build 結果、舊縮圖（`grok._compact`）；build 失敗時將 QA 失敗／擋位行放最頂、寫入 job log；QA 失敗講清楚重算值 vs 寫死值同容差；個股 prompt 補 5 個漏咗嘅最低字數（setup 等）；大盤 prompt 加 format_check 最低要求。之前：FPS 9 次 build US$7.9、ESTC US$5.3、大盤 US$3.8（全部 Grok，Anthropic 額度未增值）。下一批量吓每次重試幾錢；job log 而家會印「今輪輸入 N token（快取 M）」，睇 xAI 有冇自動快取。xAI 上網搜尋費（大盤一份 24 次）未計入估算。
 
+- [ ] **Gemini 比較**（2026-11-06 加）：睇部署 log 有冇 `gemini OK`（原生 API＋Google 搜尋喺 cloud session 測唔到，要喺 Railway 驗證）；之後同一隻股票／同一日用 Gemini 同 Grok 各出一份，比較 QA／擋位重試次數、數字準唔準同用量，再決定日常用邊個。Gemini 價錢係估計（`GEMINI_PRICE_*`），要喺 Google AI Studio／Cloud Billing 對賬；網上資料話 gemini-4-argon 2026-11-30 後加價（$4／$20）。
+
 ## 用戶提過、可以做
 - [ ] **報告中心「📸 截圖檢查」日期**：只加香港「當日」，過咗午夜就睇唔到上一個亞洲交易日（例如 11/06 凌晨睇唔到 11/05）。改法同本站 `jlaw.stock_dates()`（加最近幾個工作日）。要喺 Jlaw-report 開 PR 俾用戶 merge。
 - [ ] **XLV 2026-11-04 要重出**：Grok 出咗 76 分 ★★★ 觀察，按新評等規則應該係 ★★★★ 值得買入。

@@ -40,12 +40,16 @@ def all_jobs():
     return sorted([j for j in out if j], key=lambda j: j['created'], reverse=True)
 
 
-def new_job(date, by='網頁', upload=False, kind='market', ticker=None):
+ENGINES = ('auto', 'gemini', 'grok')
+
+
+def new_job(date, by='網頁', upload=False, kind='market', ticker=None, engine='auto'):
     for j in all_jobs():
         if j['date'] == date and j.get('kind', 'market') == kind and j.get('ticker') == ticker and j['status'] in ('queued', 'running'): return j, False
     jid = dt.datetime.now(HKZ).strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:4]
     os.makedirs(os.path.join(JOBS, jid))
-    j = dict(id=jid, kind=kind, ticker=ticker, date=date, status='queued', created=now(), by=by, auto_upload=upload, log=[], pdf=None, pdfs=[], cost=0, uploaded=None)
+    j = dict(id=jid, kind=kind, ticker=ticker, date=date, status='queued', created=now(), by=by, auto_upload=upload, log=[], pdf=None, pdfs=[], cost=0, uploaded=None,
+             engine_pref=engine if engine in ENGINES else 'auto')
     save(j); Q.put(jid); return j, True
 
 
@@ -80,6 +84,7 @@ def _run(j, agent, stock):
         folder = os.path.join(JOBS, jid)
         job = stock.StockJob(jid, j['date'], j['ticker'], folder, log) if j.get('kind') == 'stock' else agent.Job(jid, j['date'], folder, log)
         job.cancelled = lambda: jid in CANCEL
+        job.engine_pref = j.get('engine_pref', 'auto')
         def keep():
             j['pdfs'] = [os.path.basename(x) for x in job.pdfs]; j['pdf'] = j['pdfs'][0] if j['pdfs'] else None; j['pages'] = job.pages
             if getattr(job, 'info', None): j['result'] = {k: job.info.get(k) for k in ('rating', 'score', 'action', 'tier', 'signals')}
@@ -145,7 +150,8 @@ class H(BaseHTTPRequestHandler):
         """/auth/google（去 Google）、/auth/callback（返嚟）、/auth/logout；/api/me 俾網頁知點樣登入"""
         secure = '; Secure' if auth.base_url(s.headers).startswith('https') else ''
         if p == '/api/me':
-            return s._send(200, {'user': s._user(), 'google': auth.google_on(), 'password': auth.password_on()}) or True
+            return s._send(200, {'user': s._user(), 'google': auth.google_on(), 'password': auth.password_on(),
+                                 'engines': {'claude': bool(os.environ.get('ANTHROPIC_API_KEY')), 'grok': bool(os.environ.get('XAI_API_KEY')), 'gemini': bool(os.environ.get('GEMINI_API_KEY'))}}) or True
         if p == '/auth/google':
             if not auth.google_on(): return s._send(503, {'error': '未設定 GOOGLE_CLIENT_ID／GOOGLE_CLIENT_SECRET'}) or True
             st = uuid.uuid4().hex
@@ -270,20 +276,25 @@ class H(BaseHTTPRequestHandler):
             d = str(body.get('date', ''))
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
             if dt.date.fromisoformat(d).weekday() >= 5: return s._send(400, {'error': f'{d} 係週末，唔係美股交易日'})
-            if not (os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('XAI_API_KEY')): return s._send(503, {'error': '伺服器未設定 ANTHROPIC_API_KEY／XAI_API_KEY'})
+            eng = str(body.get('engine') or 'auto')
+            if eng not in ENGINES: return s._send(400, {'error': f'唔識呢個引擎：{eng}'})
+            if eng == 'gemini' and not os.environ.get('GEMINI_API_KEY'): return s._send(503, {'error': '伺服器未設定 GEMINI_API_KEY'})
+            if eng == 'grok' and not os.environ.get('XAI_API_KEY'): return s._send(503, {'error': '伺服器未設定 XAI_API_KEY'})
+            if not (os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('XAI_API_KEY') or eng == 'gemini'): return s._send(503, {'error': '伺服器未設定 ANTHROPIC_API_KEY／XAI_API_KEY'})
             if body.get('kind') == 'stock':
                 ts = [str(x).strip().upper() for x in body.get('tickers') or [] if re.fullmatch(r'[A-Za-z0-9.]{1,10}', str(x).strip())]
                 if not ts: return s._send(400, {'error': '揀最少一隻股票'})
-                made = [new_job(d, upload=bool(body.get('upload')), kind='stock', ticker=t_) for t_ in ts]
+                made = [new_job(d, upload=bool(body.get('upload')), kind='stock', ticker=t_, engine=eng) for t_ in ts]
                 return s._send(200, {'jobs': [j_['id'] for j_, _ in made], 'created': sum(1 for _, c in made if c)})
-            j, created = new_job(d, upload=bool(body.get('upload')))
+            j, created = new_job(d, upload=bool(body.get('upload')), engine=eng)
             return s._send(200, {'job': j['id'], 'created': created})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/retry', p)   # 重做：同一 kind／日期／代號開一個新 job（舊紀錄保留）
         if m:
             j = load(m.group(1))
             if not j: return s._send(404, {'error': '冇呢個 job'})
             if j['status'] in ('queued', 'running'): return s._send(400, {'error': '仲做緊／排緊隊'})
-            nj, created = new_job(j['date'], upload=bool(body.get('upload', j.get('auto_upload'))), kind=j.get('kind', 'market'), ticker=j.get('ticker'))
+            nj, created = new_job(j['date'], upload=bool(body.get('upload', j.get('auto_upload'))), kind=j.get('kind', 'market'), ticker=j.get('ticker'),
+                                  engine=str(body.get('engine') or j.get('engine_pref') or 'auto'))
             return s._send(200, {'job': nj['id'], 'created': created})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/cancel', p)
         if m:
@@ -320,6 +331,8 @@ def main():
         try: print('longbridge OK:', longbridge.check(), flush=True)
         except longbridge.LBError as e: print('longbridge 連唔到:', e, flush=True)
     threading.Thread(target=lb_selftest, daemon=True).start()
+    import gemini
+    threading.Thread(target=lambda: gemini.selftest(lambda m: print(m, flush=True)), daemon=True).start()
     port = int(os.environ.get('PORT', '8080'))
     print('listening', port, 'data', DATA, flush=True)
     ThreadingHTTPServer(('0.0.0.0', port), H).serve_forever()

@@ -92,6 +92,7 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
       <div class="msg" id="shotMsg">檢查截圖中…</div>
       <div class="shots" id="shots"></div>
       <label class="chk"><input type="checkbox" id="up"> 完成後自動上載到報告中心（Drive）</label>
+      <label class="chk">AI：<select id="eng"><option value="auto">自動（Claude，用唔到轉 Grok）</option><option value="gemini">Google Gemini</option><option value="grok">xAI Grok</option></select></label>
       <button class="big" id="go" disabled>出報告</button>
       <div class="msg" id="goMsg"></div>
       <div class="mute" style="margin-top:6px">每份約需 10–20 分鐘；AI API 按用量收費（每份約 US$2–6，完成後會顯示實際用量）。</div>
@@ -116,6 +117,7 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
       <div class="srow"><button class="sec" id="sall">揀晒顯示中截圖齊嘅</button><button class="sec" id="snone">清除</button></div>
       <div class="slist" id="slist"></div>
       <label class="chk"><input type="checkbox" id="sup"> 完成後自動上載到報告中心（Drive）</label>
+      <label class="chk">AI：<select id="seng"><option value="auto">自動（Claude，用唔到轉 Grok）</option><option value="gemini">Google Gemini</option><option value="grok">xAI Grok</option></select></label>
       <button class="big" id="sgo" disabled>出報告</button>
       <div class="msg" id="sgoMsg"></div>
       <div class="mute" style="margin-top:6px">每隻約 15 分鐘、約 US$2–4；同時做 2 隻，其餘排隊。美股會承襲當日大盤報告，建議先出大盤。</div>
@@ -189,7 +191,7 @@ $('go').onclick = async () => {
   } catch (e) {}
   $('go').disabled = true; $('goMsg').textContent = '';
   try {
-    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({date: $('date').value, upload: $('up').checked})});
+    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({date: $('date').value, upload: $('up').checked, engine: $('eng').value})});
     $('goMsg').innerHTML = r.created ? '<span class="ok">已開始，下面睇進度</span>' : '<span class="warn">呢日已經做緊，下面睇進度</span>';
     loadJobs();
   } catch (e) { $('goMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
@@ -212,7 +214,7 @@ async function loadJobs() {
   else $('jobs').innerHTML = list.map(j => {
     const [t, c] = ST[j.status] || [j.status, ''];
     return `<div class="job"><div class="hd"><b>${esc(j.date)} ${j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : '大盤報告'}</b><span class="st ${c}">${t}</span></div>
-      <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'grok' ? ' · 後備 Grok' : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
+      <div class="mute">${esc(j.created)} · ${esc(j.by)}${j.engine === 'gemini' ? ' · Gemini' : j.engine === 'grok' ? (j.engine_pref === 'grok' ? ' · Grok' : ' · 後備 Grok') : j.engine === 'claude' ? ' · Claude' : j.engine_pref && j.engine_pref !== 'auto' ? ` · ${j.engine_pref === 'gemini' ? 'Gemini' : 'Grok'}` : ''}${j.cost ? ` · 約 US$${j.cost}` : ''}${j.pages ? ` · ${j.pages} 頁` : ''}${j.uploaded ? ' · 已上載 Drive' : ''}</div>
       ${j.result ? `<div class="mute">${esc(j.result.rating)} ${esc(j.result.score)}／100 · ${esc(j.result.action)}</div>` : ''}
       <div class="mute">${esc(String(j.error || j.last || '').replace(/[*#`]/g, '').slice(0, 220))}</div>
       <div class="acts">${(j.pdfs && j.pdfs.length ? j.pdfs : (j.pdf ? [j.pdf] : [])).map((f, i) => `<button class="sec" onclick="openPdf('${j.id}', ${i})">${f.includes('行動卡') ? '行動卡' : f.includes('終極報告') ? '本體報告' : f.includes('核對附錄') ? '核對附錄' : '睇 PDF'}</button>`).join('')}
@@ -289,6 +291,16 @@ async function upload(id, btn) {
   if (!confirm('上載到報告中心 Drive？（同名舊檔會放入垃圾桶）')) return;
   btn.disabled = true;
   try { await api(`/api/jobs/${id}/upload`, {method: 'POST', body: '{}'}); loadJobs(); } catch (e) { alert('上載失敗：' + e.message); btn.disabled = false; }
+}
+function setEngines(e) {   // 冇 key 嘅引擎唔俾揀；記住上次揀咩
+  if (!e) return;
+  for (const id of ['eng', 'seng']) {
+    const sel = $(id); if (!sel) continue;
+    [...sel.options].forEach(o => { const ok = o.value === 'auto' ? (e.claude || e.grok) : e[o.value]; o.disabled = !ok; if (!ok) o.textContent += '（未設定）'; });
+    try { const v = localStorage.getItem('engine'); if (v && [...sel.options].some(o => o.value === v && !o.disabled)) sel.value = v; } catch (x) {}
+    if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) { const f = [...sel.options].find(o => !o.disabled); if (f) sel.value = f.value; }
+    sel.onchange = () => { try { localStorage.setItem('engine', sel.value); } catch (x) {} for (const o of ['eng', 'seng']) if ($(o)) $(o).value = sel.value; };
+  }
 }
 let stocks = [], picked = new Set();
 function chk(at) {   // 最近檢查時間（香港時間）
@@ -387,7 +399,7 @@ $('sgo').onclick = async () => {
   if (picked.size > 5 && !confirm(`出 ${picked.size} 隻股票報告，估計 US$${picked.size * 2}–${picked.size * 4}、要 ${Math.ceil(picked.size / 2) * 15} 分鐘左右。確定？`)) return;
   $('sgo').disabled = true; $('sgoMsg').textContent = '';
   try {
-    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({kind: 'stock', date: $('sdate').value, tickers: [...picked], upload: $('sup').checked})});
+    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({kind: 'stock', date: $('sdate').value, tickers: [...picked], upload: $('sup').checked, engine: $('seng').value})});
     $('sgoMsg').innerHTML = `<span class="ok">已加入 ${r.created} 隻（其餘已經做緊），下面睇進度</span>`; picked.clear(); drawStocks(); loadJobs();
   } catch (e) { $('sgoMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; $('sgo').disabled = false; }
 };
@@ -398,7 +410,7 @@ function start(user) {
 }
 (async () => {
   const err = new URLSearchParams(location.search).get('login_error'); if (err) history.replaceState(null, '', '/');
-  try { const r = await fetch('/api/me', {headers: {'x-password': PW}}); const me = await r.json(); auth = me; if (me.user) return start(me.user); } catch (e) {}
+  try { const r = await fetch('/api/me', {headers: {'x-password': PW}}); const me = await r.json(); auth = me; setEngines(me.engines); if (me.user) return start(me.user); } catch (e) {}
   showLogin(err || '');
 })();
 document.addEventListener('click', e => { if (e.target.id === 'logout') { try { localStorage.removeItem('pw'); } catch (x) {} } });

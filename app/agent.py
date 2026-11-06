@@ -235,6 +235,15 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         return '\n'.join(lines) or '今次冇 Longbridge 核實'
 
     def analyze(s, system, content):
+        pref = getattr(s, 'engine_pref', None)   # 網頁揀咗邊個引擎（auto／gemini／grok）
+        if pref == 'gemini':
+            import gemini
+            s.engine = 'gemini'; s.log(f'用 Google Gemini（{gemini.MODEL}）')
+            return gemini.run(s, system, content)
+        if pref == 'grok':
+            import grok
+            s.engine = 'grok'; s.log('用 xAI Grok（網頁指定）')
+            return grok.run(s, system, content)
         if os.environ.get('ANTHROPIC_API_KEY'):
             try:
                 return s.run_claude(system, content)
@@ -333,7 +342,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'INVALID_INPUT：inspect_data 要有 code（Python 源碼）'}
         s.inspects = getattr(s, 'inspects', 0) + 1
         # Grok（store:false）每輪重送成段對話（連截圖），睇資料一次就貴一次：Grok 最多 3 次（INSPECT_MAX_GROK），Claude 有快取，25 次
-        cap = int(os.environ.get('INSPECT_MAX_GROK', '3')) if s.engine == 'grok' else 25
+        cap = int(os.environ.get('INSPECT_MAX_GROK', '3')) if s.engine == 'grok' else int(os.environ.get('INSPECT_MAX_GEMINI', '5')) if s.engine == 'gemini' else 25
         if s.inspects > cap: return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': f'inspect_data 已經用咗 {cap} 次（上限），唔好再用：其餘數字喺 work 檔入面用 m 計，直接交 build_report'}
         cwd, pre = s.inspect_prelude()
         fp = os.path.join(s.dir, f'inspect_{s.inspects}.py'); open(fp, 'w', encoding='utf-8').write(pre + '\n' + code)
@@ -350,7 +359,7 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
     # ---- 大盤報告專用（StockJob 覆寫）
     def build_cmd(s, wp):
         return ([sys.executable, os.path.join(GEN, 'market', 'build.py'), s.date, wp, '--out', s.dir],
-                {'MARKET_SUFFIX': 'Grok核實版' if s.engine == 'grok' else 'Claude核實版',
+                {'MARKET_SUFFIX': {'grok': 'Grok核實版', 'gemini': 'Gemini核實版'}.get(s.engine, 'Claude核實版'),
                  'FORMAT_STRICT': os.environ.get('FORMAT_STRICT', '1'), 'JLAW_REQUIRED': '1' if s.jlaw_required else '0'})
 
     def on_success(s, info):
