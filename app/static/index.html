@@ -293,7 +293,7 @@ let canUpload = false, openLog = new Set();
 async function loadJobs() {
   let d; try { d = await api('/api/jobs'); } catch (e) { return; }
   canUpload = d.can_upload;
-  $('autoNote').textContent = d.auto ? '每日定時排程：已開（香港朝早截圖齊就自動出）' : '每日定時排程：未開';
+  $('autoNote').textContent = '每日定時排程：美股' + (d.auto ? '已開（香港朝早截圖齊就自動出）' : '未開') + '；亞洲大盤' + (d.auto_asia ? '已開（香港 17:30–21:30 截圖齊就自動出香港／日本／韓國）' : '未開');
   allJobs = d.jobs;
   const JF = [['all', '全部'], ['done', '完成'], ['failed', '失敗／取消'], ['active', '做緊／排隊']];
   const inF = (j, k) => k === 'all' || (k === 'done' ? j.status === 'done' : k === 'failed' ? (j.status === 'failed' || j.status === 'cancelled') : (j.status === 'running' || j.status === 'queued'));

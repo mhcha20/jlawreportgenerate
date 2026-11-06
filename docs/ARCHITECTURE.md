@@ -90,7 +90,7 @@ jlawreportgenerate（本 repo，Railway）── app/server.py：網頁＋API＋
 | POST `/api/auth` | 試密碼 |
 
 ## 5. 排程
-`AUTO_MARKET=1`：每 15 分鐘，香港 `AUTO_START`–`AUTO_END`（默認 06:30–11:30），最近美股交易日截圖齊、Drive 未有報告、今日排程未試過 → 出一次大盤報告（失敗唔重試）；`AUTO_UPLOAD=1` 自動上載。**個股冇自動排程**（用戶揀咗手動，成本考慮）。
+`AUTO_MARKET=1`：每 15 分鐘，香港 `AUTO_START`–`AUTO_END`（默認 06:30–11:30），最近美股交易日截圖齊、Drive 未有報告、今日排程未試過 → 出一次大盤報告（失敗唔重試）；`AUTO_UPLOAD=1` 自動上載。**個股冇自動排程**（用戶揀咗手動，成本考慮）。亞洲大盤（2026-11-06）：`AUTO_ASIA`（默認跟 `AUTO_MARKET`），香港 17:30–21:30 平日，香港／日本／韓國截圖齊、Drive 未有就自動出，引擎默認 Gemini。
 
 ## 6. 同 Jlaw-report 嘅關係（要同步嘅地方）
 - `gen/`、`gen/market/` 係由 Jlaw-report `tools/stockreport/` 搬過嚟，**兩邊改框架要同步**（Jlaw-report 舊排程仲用緊佢嗰份）。

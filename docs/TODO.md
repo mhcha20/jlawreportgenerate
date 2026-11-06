@@ -19,7 +19,7 @@
 
 - [ ] **推介**（2026-11-06 加）：11/05 試計頭幾名 2640、7832（升穿觸發＋放量新高）、GRID、PANW、AIPO（跌穿離場／減倉）。用一兩星期睇推介準唔準、權重要唔要調（`app/suggest.py` `_score`）；業績日只喺 Railway 有 Longbridge 時先計。
 
-- [ ] **亞洲大盤報告**（2026-11-06 加，未出過真報告）：要等 Mac `bash mac/update.sh` 之後 17:15 排程（或手動 `capture_market_charts.py --market hk`）上載 `HK`／`JP`／`KR` 截圖。第一份出咗要睇：AI 有冇照美股範本結構寫、篇幅門檻（`gen/amarket/format_check.py`）要唔要調、build 次數同用量、廣度／資金流有冇上網核實到。之後可以考慮：自動排程、港股個股承襲當日香港大盤報告、J Law 對照。
+- [ ] **亞洲大盤報告**（2026-11-06 加，未出過真報告）：要等 Mac `bash mac/update.sh` 之後 17:15 排程（或手動 `capture_market_charts.py --market hk`）上載 `HK`／`JP`／`KR` 截圖。第一份出咗要睇：AI 有冇照美股範本結構寫、篇幅門檻（`gen/amarket/format_check.py`）要唔要調、build 次數同用量、廣度／資金流有冇上網核實到。2026-11-06 第一份香港（Gemini，1 次 build，US$0.72，14 頁＝上限）。同日加咗：自動排程（17:30–21:30）、亞洲股個股承襲同市場大盤報告、J Law 觀點（選填）。下一個交易日睇排程有冇自動出三份、用量、J Law 一節寫成點。
 
 - [ ] **升跌符號同顏色**（2026-11-06）：美股＋亞洲大盤報告改 ▲ 綠／▼ 紅（`mlib`／`alib` 嘅 `P／N／AR`）。Jlaw-report `tools/stockreport/market/mlib.py` 未同步（舊排程仲用 ＋）；個股報告（`gen/lib.py` 等）未改，用戶未要求。下一份睇 AI 自己寫嘅文字有冇跟 ▲／▼。
 - [ ] **J Law 報告上載**（2026-11-06 加）：網頁卡 →`/api/jlaw_upload`。第一份 JLawStock 5 Nov 2026 等用戶喺網站上載；之後睇美股大盤報告有冇讀到（log「J Law 觀點材料：…」）。亞洲大盤同個股報告暫時唔用 J Law 材料。

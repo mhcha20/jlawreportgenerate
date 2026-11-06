@@ -60,6 +60,7 @@ def texts(m, S):
         # (事件, 日期 YYYY-MM-DD, 'HH:MM'（當地時間）／'ET HH:MM'（美東）／None＝時間未核實, 預期／前值, 關注點[, cls])；香港時間自動換算
         'next_week': [('TODO', m.date, None, 'TODO', 'TODO')],
         'next_week_note': '', 'next_week_foot': 'TODO（日程以哪個來源為準；未核實日程唔補造）',
+        # 'jlaw_html': 選填；有 J Law 觀點材料而且有講到本市場（或整體風險胃納）先寫：材料清單、風險胃納、逐項表（J Law 講法｜日期｜對今日數據核實｜一致／唔一致／未能核實）；冇關就刪走呢個 key
         # 'action_rows': 條件式行動清單 [[#, 項目, 條件／做法], …]，非買賣建議；每隻主指數 ETF 各一項
         'history_html': 'TODO（有充分證據才做；不足就寫明無法比較）',
         'regime_rows': [['<b>短線</b>', 'TODO', 'TODO', 'TODO'], ['<b>中期</b>', 'TODO', 'TODO', 'TODO'], ['<b>長期</b>', 'TODO', 'TODO', 'TODO']],

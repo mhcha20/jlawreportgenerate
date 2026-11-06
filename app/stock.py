@@ -120,6 +120,12 @@ class StockJob(agent.Job):
             try: mname, mtxt, same = jlaw.market_report_for(date)
             except Exception as e: s.log(f'⚠ 讀唔到大盤報告：{e}')
             s.log(f'大盤報告：{mname or "無"}' + ('' if same or not mname else '（唔係當日，承襲最近一份，要喺 foot 註明）'))
+        else:   # 亞洲股承襲同市場大盤報告（香港／日本／韓國，用戶 2026-11-06 要求）
+            title = jlaw.asia_title(t)
+            if title:
+                try: mname, mtxt, same = jlaw.asia_report_for(title, date)
+                except Exception as e: s.log(f'⚠ 讀唔到{title}：{e}')
+            s.log(f'{title or "亞洲大盤"}報告：{mname or "無（只用圖面指數）"}' + ('' if same or not mname else '（唔係當日，承襲最近一份，要喺 foot 註明）'))
         ref = ''
         if FORMAT_REF_STOCK:
             try:
@@ -148,7 +154,7 @@ Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三�
 
 上一份報告（用嚟寫 prior／biggest／vsprior；先核對佢嘅日期同收市價）：{ptxt or '（冇，首份）'}
 
-當日大盤報告（市場配合構面、R4 第一項、mkt_state／mkt_ref）：{mname or '（冇' + ('，亞洲股只用圖面指數' if sh['kind'] == 'ASIA' else '') + '）'}
+當日大盤報告（市場配合構面、R4 第一項、mkt_state／mkt_ref）：{mname or '（冇' + ('，亞洲股只用圖面指數' if sh['kind'] == 'ASIA' else '') + '）'}{'（唔係當日，承襲最近一份，要喺 foot 註明）' if mname and not same else ''}
 {mtxt[:30000]}
 
 請：①逐張睇晒截圖抄讀數；②下次財報日：上面 Longbridge 有就用佢（註明來源 Longbridge 財經日曆，以公司公告為準），冇先用 web_search 核實；用 web_search 核實近期新聞／催化劑、分析員評級（附來源同日期）；③九構面逐格評分寫理由、A／B 路徑價位、減倉／離場、今日動作；④寫完整 work 檔（spec／texts／qa），用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結（評等、分數、今日動作）收尾。"""})

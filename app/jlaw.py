@@ -76,6 +76,22 @@ def prev_asia_report(title, date):
     with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read())
 
 
+def asia_report_for(title, date):
+    """亞洲股個股承襲同市場大盤報告：優先 date 當日（Claude核實版＞其他核實版），冇就最近一份 → (名, 文字, 係咪當日)"""
+    rows = [r for r in get_json('/api/sync')['rows'] if title in r[2] and re.match(r'\d{4}-\d\d-\d\d', r[2]) and r[2][:10] <= date]
+    if not rows: return None, '', False
+    rank = lambda r: (r[2][:10], 2 if 'Claude核實版' in r[2] else 1 if '核實版' in r[2] else 0, r[3])
+    r = sorted(rows, key=rank, reverse=True)[0]
+    with _open(f'{SITE}/pdf/{r[1]}', timeout=180) as f: return r[2], _pdf_text(f.read()), r[2][:10] == date
+
+
+def asia_title(ticker):
+    """亞洲股代號 → 同市場大盤報告標題：5 位數字／0 開頭 4 位＝香港、4 位＝日本、6 位＝韓國"""
+    t = ticker.strip()
+    if not t.isdigit(): return None
+    return '香港大盤分析' if len(t) == 5 or (len(t) == 4 and t[0] == '0') else '日本大盤分析' if len(t) == 4 else '韓國大盤分析' if len(t) == 6 else None
+
+
 def has_asia_report(title, date, rows=None):
     try: return any(title in r[2] and r[2].startswith(date) for r in (rows if rows is not None else get_json('/api/sync')['rows']))
     except Exception: return False

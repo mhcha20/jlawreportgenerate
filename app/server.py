@@ -109,19 +109,38 @@ def _run(j, agent, stock):
 
 
 def scheduler():
-    """每 15 分鐘：香港時間喺 AUTO_START–AUTO_END 之間，最近美股交易日截圖齊、Drive 未有報告、今日未做過 → 自動出（失敗唔會重試）"""
-    if os.environ.get('AUTO_MARKET') != '1': return
+    """每 15 分鐘：
+    ① 美股（AUTO_MARKET=1）：香港 AUTO_START–AUTO_END（默認 06:30–11:30），最近美股交易日截圖齊、Drive 未有報告、今日排程未試過 → 出一次。
+    ② 亞洲（AUTO_ASIA，默認跟 AUTO_MARKET）：香港 AUTO_ASIA_START–AUTO_ASIA_END（默認 17:30–21:30，Mac 17:15 截圖），今日（平日）
+       香港／日本／韓國逐個：截圖齊、Drive 未有、排程未試過 → 出一份（引擎 AUTO_ASIA_ENGINE，默認有 Gemini key 就用 Gemini）。假期冇截圖自動跳過。
+    失敗唔會重試（避免重複收費）；AUTO_UPLOAD=1 自動上載。"""
+    us_on = os.environ.get('AUTO_MARKET') == '1'
+    asia_on = os.environ.get('AUTO_ASIA', os.environ.get('AUTO_MARKET', '0')) == '1'
+    if not (us_on or asia_on): return
     a, b = os.environ.get('AUTO_START', '06:30'), os.environ.get('AUTO_END', '11:30')
+    aa, ab = os.environ.get('AUTO_ASIA_START', '17:30'), os.environ.get('AUTO_ASIA_END', '21:30')
+    aeng = os.environ.get('AUTO_ASIA_ENGINE') or ('gemini' if os.environ.get('GEMINI_API_KEY') else 'auto')
+    up = os.environ.get('AUTO_UPLOAD') == '1'
     while True:
         try:
-            t = dt.datetime.now(HKZ).strftime('%H:%M')
-            if a <= t <= b:
+            now_hk = dt.datetime.now(HKZ); t = now_hk.strftime('%H:%M')
+            if us_on and a <= t <= b:
                 d = jlaw.last_us_trading_day()
-                tried = any(j['date'] == d and j['by'] == '排程' for j in all_jobs())
+                tried = any(j['date'] == d and j['by'] == '排程' and j.get('kind', 'market') == 'market' for j in all_jobs())
                 if not tried and not jlaw.has_report(d):
                     sh = jlaw.market_shots(d)
                     if sh['folder'] and not sh['missing']:
-                        new_job(d, by='排程', upload=os.environ.get('AUTO_UPLOAD') == '1')
+                        new_job(d, by='排程', upload=up)
+            if asia_on and aa <= t <= ab and now_hk.weekday() < 5:
+                import asia
+                d = now_hk.date().isoformat(); root = None
+                for k, pr in asia.PROFILES.items():
+                    if any(j['date'] == d and j['by'] == '排程' and j.get('kind') == 'amarket' and j.get('ticker') == k for j in all_jobs()): continue
+                    if jlaw.has_asia_report(pr['title'], d): continue
+                    if root is None: root = jlaw.ls(jlaw.MROOT)
+                    sh = jlaw.asia_shots(k, d, root)
+                    if sh['folder'] and not sh['missing']:
+                        new_job(d, by='排程', upload=up, kind='amarket', ticker=k, engine=aeng)
         except Exception as e: print('scheduler', e, flush=True)
         time.sleep(900)
 
@@ -192,7 +211,7 @@ class H(BaseHTTPRequestHandler):
             aj = all_jobs()
             return s._send(200, {'jobs': [{k: v for k, v in j.items() if k != 'log'} | {'last': (j['log'] or [''])[-1]} for j in aj[:200]],
                                  'n_queued': sum(1 for j in aj if j['status'] == 'queued'), 'n_running': sum(1 for j in aj if j['status'] == 'running'),
-                                 'auto': os.environ.get('AUTO_MARKET') == '1', 'can_upload': bool(os.environ.get('JLAW_ADMIN_PASSWORD'))})
+                                 'auto': os.environ.get('AUTO_MARKET') == '1', 'auto_asia': os.environ.get('AUTO_ASIA', os.environ.get('AUTO_MARKET', '0')) == '1', 'can_upload': bool(os.environ.get('JLAW_ADMIN_PASSWORD'))})
         m = re.fullmatch(r'/api/jobs/([\w-]+)', p)
         if m:
             j = load(m.group(1)); return s._send(200, j) if j else s._send(404, {'error': '冇呢個 job'})

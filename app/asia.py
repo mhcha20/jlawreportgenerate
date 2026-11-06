@@ -108,6 +108,11 @@ class AsiaJob(agent.Job):
         s.log(f'上一份{pr["title"]}：{pname or "無（第一份）"}')
         try: s.ref_name, s.ref_txt = jlaw.report_by_name(FORMAT_REF)
         except Exception as e: s.ref_name, s.ref_txt = None, ''; s.log(f'⚠ 讀唔到結構範本：{e}')
+        try: jl = jlaw.jlaw_materials(date)
+        except Exception as e: jl = []; s.log(f'⚠ 讀唔到 J Law 觀點材料：{e}')
+        if jl is None: jl = []; s.log('⚠ 未設定 JLAW_ADMIN_PASSWORD：讀唔到 J Law 觀點材料')
+        else: s.log(f'J Law 觀點材料：{"、".join(n for n, _ in jl) or "分析日前 10 日內冇"}')
+        jtxt = ''.join(f'\n--- {n} ---\n{t[:20000]}' for n, t in jl)
         hk = dt.datetime.now(ZoneInfo('Asia/Hong_Kong'))
         content = []
         for t, f, data in imgs:
@@ -122,6 +127,9 @@ class AsiaJob(agent.Job):
 
 Longbridge 核實（網站代做；結果寫入第二節資料來源）：
 {lbtxt}
+
+J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝發布日期，只用 ≤ 分析交易日嘅；J Law 多數講美股）：{jtxt or '（冇）'}
+有材料而且有講到{pr['name']}市場、亞洲、中國，或者整體風險胃納（Risk-On／Neutral／Risk-Off）就寫 jlaw_html（材料清單、風險胃納點樣套用到{pr['name']}、逐項表 ≥3 項對今日{pr['name']}數據核實）；完全冇關就唔好寫，喺 inherit_note 一句講明「J Law 材料主要講美股，冇直接涉及{pr['name']}」。
 
 請：①逐張睇晒 {len(imgs)} 張圖抄讀數（收市、前收如睇到、圖面量）；②同上一份報告比較（冇就略過）；③用 web_search 核實過去 5 個交易日{pr['name']}市場催化劑、未來一星期日程，同廣度（升跌家數等）如搵到；④結構參照系統提示入面嘅美股範本；⑤寫完整 work 檔，用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結今日市況分類收尾。"""})
         return s.analyze(system_prompt(pr, s.ref_name, s.ref_txt), content)

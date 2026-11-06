@@ -21,6 +21,10 @@ def s1(m, S, T):
     o.append(table(None, T['sum_rows'], widths=['13%', '87%'], kv=True))
     return o
 
+def sjl(m, S, T):   # 選填：J Law 觀點（私人材料）同本市場有關嘅講法逐項對數據核實
+    if not T.get('jlaw_html'): return []
+    return [sec('', 'J Law 觀點對照及逐項核實'), T['jlaw_html']]
+
 def s2(m, S, T):
     o = [sec('二', '資料截止時間、來源及缺項（V1.0 第三節）')]
     loc, hk, edt = utc_to(S['meta']['shot_utc'])
@@ -261,5 +265,5 @@ def tail(m, S, T):
     return o
 
 def build_html(m, S, T):
-    parts = head(m, S, T) + s1(m, S, T) + s2(m, S, T) + s3(m, S, T) + s4(m, S, T) + s5(m, S, T) + s6(m, S, T) + s7(m, S, T) + s8(m, S, T) + s9(m, S, T) + tail(m, S, T)
+    parts = head(m, S, T) + s1(m, S, T) + sjl(m, S, T) + s2(m, S, T) + s3(m, S, T) + s4(m, S, T) + s5(m, S, T) + s6(m, S, T) + s7(m, S, T) + s8(m, S, T) + s9(m, S, T) + tail(m, S, T)
     return '\n'.join(parts)
