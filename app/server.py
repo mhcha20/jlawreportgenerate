@@ -22,9 +22,29 @@ WATCH = os.path.join(DATA, 'watchlist.json')
 WATCH_DEFAULT = ['CAT', 'FPS', 'AAPL', 'ESTC', 'BE', 'XLV', 'PLTR', 'NVDA', 'MCD', 'SPCX', 'WM', 'COPX']   # 用戶 2026-11-06 每日睇嘅股票
 
 
-def watchlist():
-    try: return json.load(open(WATCH, encoding='utf-8'))['tickers']
-    except Exception: return list(WATCH_DEFAULT)
+def watchlists():
+    """自訂股票清單（用戶 2026-11-07 要求：可以改名、加多幾個）→ [{'name', 'tickers'}]；舊格式 {'tickers': [...]} 當「每日清單」"""
+    try: d = json.load(open(WATCH, encoding='utf-8'))
+    except Exception: d = {}
+    if d.get('lists'): return d['lists']
+    return [{'name': '每日清單', 'tickers': d.get('tickers') or list(WATCH_DEFAULT)}]
+
+
+def watchlist(): return watchlists()[0]['tickers']
+
+
+def clean_lists(raw):
+    out, names = [], set()
+    for x in (raw or [])[:20]:
+        name = re.sub(r'\s+', ' ', str((x or {}).get('name', ''))).strip()[:20]
+        if not name or name in names: raise ValueError(f'清單名唔可以空白或者重複：「{name}」')
+        ts = []
+        for t in (x.get('tickers') or [])[:150]:
+            t = str(t).strip().upper()
+            if re.fullmatch(r'[A-Z0-9.]{1,10}', t) and t not in ts: ts.append(t)
+        names.add(name); out.append({'name': name, 'tickers': ts})
+    if not out: raise ValueError('最少要有一個清單')
+    return out
 
 
 def now(): return dt.datetime.now(HKZ).strftime('%Y-%m-%d %H:%M:%S')
@@ -287,7 +307,7 @@ class H(BaseHTTPRequestHandler):
                 sh = jlaw.market_shots(d)
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
-        if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
+        if p == '/api/watchlist': wl = watchlists(); return s._send(200, {'lists': wl, 'tickers': wl[0]['tickers']})
         if p == '/api/capture':   # 網頁遙控 Mac 截圖：狀態＋最近動作＋預設日期
             import capture
             v = capture.view(DATA)
@@ -359,13 +379,13 @@ class H(BaseHTTPRequestHandler):
             import capture
             try: return s._send(200, {'task': capture.cancel(DATA, m.group(1))})
             except ValueError as e: return s._send(400, {'error': str(e)})
-        if p == '/api/watchlist':   # 每日清單（存喺 volume，所有裝置共用）
-            ts = []
-            for x in body.get('tickers') or []:
-                x = str(x).strip().upper()
-                if re.fullmatch(r'[A-Z0-9.]{1,10}', x) and x not in ts: ts.append(x)
-            with LOCK: json.dump({'tickers': ts, 'at': now()}, open(WATCH, 'w', encoding='utf-8'), ensure_ascii=False)
-            return s._send(200, {'tickers': ts})
+        if p == '/api/watchlist':   # 自訂股票清單（存喺 volume，所有裝置共用）：{lists:[{name,tickers}]} 成份覆蓋；舊用法 {tickers} 只改第一個
+            try:
+                if 'lists' in body: wl = clean_lists(body['lists'])
+                else: wl = watchlists(); wl[0] = clean_lists([{'name': wl[0]['name'], 'tickers': body.get('tickers') or []}])[0]
+            except ValueError as e: return s._send(400, {'error': str(e)})
+            with LOCK: json.dump({'lists': wl, 'at': now()}, open(WATCH, 'w', encoding='utf-8'), ensure_ascii=False)
+            return s._send(200, {'lists': wl, 'tickers': wl[0]['tickers']})
         if p == '/api/generate':
             d = str(body.get('date', ''))
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})

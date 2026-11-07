@@ -133,7 +133,8 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       <h3 class="ch">檢查</h3>
       <div class="cbtns"><button class="sec" data-act="check">檢查 Drive 齊唔齊</button><button class="sec" data-act="fill">檢查並自動補截欠嘅</button></div>
       <h3 class="ch">截股票</h3>
-      <div class="cbtns"><button class="sec" id="cpWatch">⭐ 每日清單</button><button class="sec" id="cpMiss">揀截圖未齊／未有</button><button class="sec" id="cpClear">清除</button></div>
+      <div class="chips" id="cpLists"></div>
+      <div class="cbtns"><button class="sec" id="cpMiss">揀截圖未齊／未有</button><button class="sec" id="cpClear">清除</button></div>
       <div class="mute" id="cpMsg"></div>
       <details id="cpAll"><summary class="mute" style="cursor:pointer">▸ 由股票清單逐隻撳揀</summary>
         <input id="cpFind" placeholder="搵代號／名稱" style="margin-top:6px"><div class="chips" id="cpChips"></div></details>
@@ -164,8 +165,10 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       <div class="chips" id="smkt"></div>
       <div class="chips" id="stheme"></div>
       <div class="watch">
-        <button id="wpick">⭐ 每日清單</button>
-        <button class="sec" id="wsave">將而家剔咗嘅存做每日清單</button>
+        <div class="mute">⭐ 我嘅清單（撳清單名＝剔晒入面截圖齊嘅股票）</div>
+        <div class="chips" id="wlists"></div>
+        <div class="cbtns"><button class="sec" id="wsave">將剔咗嘅存入呢個清單</button><button class="sec" id="wnew">＋ 新清單</button>
+          <button class="sec" id="wren">改名</button><button class="sec" id="wdel">刪除清單</button></div>
         <div class="mute" id="wlist"></div>
       </div>
       <div class="watch">
@@ -398,11 +401,14 @@ $('cpAll').ontoggle = async () => { if ($('cpAll').open && await cpLoad()) cpDra
 $('cpFind').oninput = cpDraw;
 $('ctk').oninput = () => { if ($('cpAll').open) cpDraw(); };
 $('cpClear').onclick = () => cpWrite(new Set());
-$('cpWatch').onclick = async () => {
-  if (!watch.length) await loadWatch();
-  const s2 = cpSet(); watch.forEach(t => s2.add(t)); cpWrite(s2);
-  $('cpMsg').textContent = `已加入每日清單 ${watch.length} 隻`;
-};
+function drawCpLists() {
+  if (!$('cpLists')) return;
+  $('cpLists').innerHTML = wLists.map((l, i) => `<button data-i="${i}">⭐ ${esc(l.name)}（${l.tickers.length}）</button>`).join('');
+  $('cpLists').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const l = wLists[+b.dataset.i]; const s2 = cpSet(); l.tickers.forEach(t => s2.add(t)); cpWrite(s2);
+    $('cpMsg').textContent = `已加入「${l.name}」${l.tickers.length} 隻`;
+  });
+}
 $('cpMiss').onclick = async () => {
   if (!await cpLoad()) return;
   const miss = cpRows.filter(x => x.status !== 'ok').map(x => x.ticker);
@@ -593,28 +599,64 @@ $('ssort').onchange = drawStocks;
 function pick(t, on) { on ? picked.add(t) : picked.delete(t); drawStocks(); }
 $('sfind').oninput = drawStocks; $('sreload').onclick = loadStocks; $('sdate').onchange = () => { picked.clear(); sugg = []; $('sgPick').hidden = true; $('sgList').innerHTML = '<div class="mute">日期改咗，再撳「💡 推介」</div>'; loadStocks(); };
 // 每日清單：一撳就剔晒（截圖未齊嘅會列出），剔完可以照改；改完撳「存做每日清單」
-let watch = [];
-async function loadWatch() { try { watch = (await api('/api/watchlist')).tickers; } catch (e) {} drawWatch(); }
-function drawWatch() {
-  $('wpick').textContent = `⭐ 每日清單（${watch.length}）`;
-  if (!watch.length) { $('wlist').textContent = '未有清單：剔好股票再撳「存做每日清單」'; return; }
-  const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
-  $('wlist').innerHTML = watch.map(t => { const x = by[t]; const st = !stocks.length ? '' : !x ? '（冇呢隻）' : x.status === 'ok' ? '' : x.status === 'none' ? '（未有截圖）' : '（截圖未齊）';
-    return `<span class="${st ? 'warn' : ''}">${esc(t)}${st}</span>`; }).join('、');
+let wLists = [], wCur = 0, watch = [];   // 自訂股票清單（server：/api/watchlist）；watch＝而家揀緊嗰個清單嘅代號
+try { wCur = +localStorage.getItem('wcur') || 0; } catch (e) {}
+async function loadWatch() {
+  try { const r = await api('/api/watchlist'); wLists = r.lists || [{name: '每日清單', tickers: r.tickers || []}]; } catch (e) {}
+  drawWatch();
 }
-$('wpick').onclick = () => {
+async function saveLists(lists, msg) {
+  try { const r = await api('/api/watchlist', {method: 'POST', body: JSON.stringify({lists})}); wLists = r.lists; drawWatch(); if (msg) $('sgoMsg').innerHTML = `<span class="ok">${esc(msg)}</span>`; return true; }
+  catch (e) { alert('存唔到：' + e.message); return false; }
+}
+function drawWatch() {
+  if (wCur >= wLists.length) wCur = 0;
+  try { localStorage.setItem('wcur', wCur); } catch (e) {}
+  watch = (wLists[wCur] || {}).tickers || [];
+  $('wlists').innerHTML = wLists.map((l, i) => `<button class="${i === wCur ? 'on' : ''}" data-i="${i}">⭐ ${esc(l.name)}（${l.tickers.length}）</button>`).join('');
+  $('wlists').querySelectorAll('button').forEach(b => b.onclick = () => { wCur = +b.dataset.i; drawWatch(); pickList(); });
+  const cur = wLists[wCur];
+  $('wsave').textContent = cur ? `將剔咗嘅存入「${cur.name}」` : '將剔咗嘅存入清單';
+  if (!watch.length) $('wlist').textContent = cur ? `「${cur.name}」未有股票：剔好股票再撳「存入」` : '';
+  else {
+    const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
+    $('wlist').innerHTML = watch.map(t => { const x = by[t]; const st = !stocks.length ? '' : !x ? '（冇呢隻）' : x.status === 'ok' ? '' : x.status === 'none' ? '（未有截圖）' : '（截圖未齊）';
+      return `<span class="${st ? 'warn' : ''}">${esc(t)}${st}</span>`; }).join('、');
+  }
+  if (typeof drawCpLists === 'function') drawCpLists();
+}
+function pickList() {
   const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
   const ok = watch.filter(t => by[t] && by[t].status === 'ok'), skip = watch.filter(t => !ok.includes(t));
   picked.clear(); ok.forEach(t => picked.add(t));
   sMkt = 'all'; sTheme = 'all'; $('sfind').value = ''; drawStocks();
-  $('sgoMsg').innerHTML = `<span class="ok">已剔 ${ok.length} 隻</span>` + (skip.length ? `<span class="warn">；${esc(skip.join('、'))} 呢日截圖未齊／未有，冇剔</span>` : '');
-};
+  $('sgoMsg').innerHTML = `<span class="ok">「${esc(wLists[wCur].name)}」已剔 ${ok.length} 隻</span>` + (skip.length ? `<span class="warn">；${esc(skip.join('、'))} 呢日截圖未齊／未有，冇剔</span>` : '');
+}
 $('wsave').onclick = async () => {
+  const cur = wLists[wCur]; if (!cur) return;
   if (!picked.size) { alert('先剔好要嘅股票'); return; }
   const ts = [...picked].sort(codeCmp);
-  if (!confirm(`將每日清單改做呢 ${ts.length} 隻？\n${ts.join('、')}`)) return;
-  try { watch = (await api('/api/watchlist', {method: 'POST', body: JSON.stringify({tickers: ts})})).tickers; drawWatch(); $('sgoMsg').innerHTML = '<span class="ok">每日清單已更新</span>'; }
-  catch (e) { alert('存唔到：' + e.message); }
+  if (!confirm(`將「${cur.name}」改做呢 ${ts.length} 隻？（原本 ${cur.tickers.length} 隻會被取代）\n${ts.join('、')}`)) return;
+  await saveLists(wLists.map((l, i) => i === wCur ? {name: l.name, tickers: ts} : l), `「${cur.name}」已更新（${ts.length} 隻）`);
+};
+$('wnew').onclick = async () => {
+  const name = (prompt(`新清單叫咩名？（最多 20 字）${picked.size ? `\n會放入而家剔咗嘅 ${picked.size} 隻` : '\n而家冇剔股票：會開一個空清單，之後剔好再撳「存入」'}`) || '').trim();
+  if (!name) return;
+  if (wLists.some(l => l.name === name)) { alert('已經有同名清單'); return; }
+  if (await saveLists([...wLists, {name, tickers: [...picked].sort(codeCmp)}], `已新增清單「${name}」`)) { wCur = wLists.length - 1; drawWatch(); }
+};
+$('wren').onclick = async () => {
+  const cur = wLists[wCur]; if (!cur) return;
+  const name = (prompt('改做咩名？', cur.name) || '').trim();
+  if (!name || name === cur.name) return;
+  if (wLists.some(l => l.name === name)) { alert('已經有同名清單'); return; }
+  await saveLists(wLists.map((l, i) => i === wCur ? {name, tickers: l.tickers} : l), `已改名做「${name}」`);
+};
+$('wdel').onclick = async () => {
+  const cur = wLists[wCur]; if (!cur) return;
+  if (wLists.length <= 1) { alert('最少要留一個清單（可以改名或者改內容）'); return; }
+  if (!confirm(`刪除清單「${cur.name}」（${cur.tickers.length} 隻）？刪咗冇得復原。`)) return;
+  if (await saveLists(wLists.filter((_, i) => i !== wCur), `已刪除「${cur.name}」`)) { wCur = 0; drawWatch(); }
 };
 // 推介：/api/suggest 用上一張行動卡價位＋當日量價計分（唔用 AI）
 let sugg = [];
