@@ -28,6 +28,11 @@ def _metrics(rows, date):
                 down=C[-1] < C[-2], ddv=V[-1] > V[-2] and V[-1] > v50)
 
 
+def _n(x):
+    """價位顯示：唔用科學記數（000660 離場線 1160000 之前顯示成 1.16e+06）"""
+    return f'{x:.4g}' if abs(x) < 1 else f'{x:,.2f}'.rstrip('0').rstrip('.')
+
+
 def _score(t, m, card, er, date):
     pts, why, kinds = 0, [], set()
     def add(p, s, k=''):
@@ -38,14 +43,14 @@ def _score(t, m, card, er, date):
         lv = card.get('levels') or {}
         buy, trim, stop = ((lv.get(k) or {}).get('price') for k in ('buy', 'trim', 'stop'))
         if buy:
-            if c > buy and prev <= buy: add(5, f'收市升穿順勢觸發 {buy:g}（要核實量）', 'opp')
-            elif c <= buy and buy / c - 1 <= 0.03: add(3, f'距順勢觸發 {buy:g} 只差 {(buy / c - 1) * 100:.1f}%', 'opp')
+            if c > buy and prev <= buy: add(5, f'收市升穿順勢觸發 {_n(buy)}（要核實量）', 'opp')
+            elif c <= buy and buy / c - 1 <= 0.03: add(3, f'距順勢觸發 {_n(buy)} 只差 {(buy / c - 1) * 100:.1f}%', 'opp')
         if stop:
-            if c < stop and prev >= stop: add(5, f'收市跌穿離場線 {stop:g}（持倉要處理）', 'risk')
-            elif c >= stop and c / stop - 1 <= 0.02: add(2, f'貼近離場線 {stop:g}（{(c / stop - 1) * 100:.1f}%）', 'risk')
+            if c < stop and prev >= stop: add(5, f'收市跌穿離場線 {_n(stop)}（持倉要處理）', 'risk')
+            elif c >= stop and c / stop - 1 <= 0.02: add(2, f'貼近離場線 {_n(stop)}（{(c / stop - 1) * 100:.1f}%）', 'risk')
         if trim and (not stop or c >= stop):
-            if c < trim and prev >= trim: add(4, f'收市跌穿減倉線 {trim:g}', 'risk')
-            elif c >= trim and c / trim - 1 <= 0.02: add(2, f'貼近減倉線 {trim:g}（{(c / trim - 1) * 100:.1f}%）', 'risk')
+            if c < trim and prev >= trim: add(4, f'收市跌穿減倉線 {_n(trim)}', 'risk')
+            elif c >= trim and c / trim - 1 <= 0.02: add(2, f'貼近減倉線 {_n(trim)}（{(c / trim - 1) * 100:.1f}%）', 'risk')
         age = (dt.date.fromisoformat(date) - dt.date.fromisoformat(card['date'])).days
         if age >= 7: add(1, f'{age} 日冇出新卡（上一張 {card["date"]}）')
         if (card.get('score') or 0) >= 70: add(1, f'上一張評等 {card.get("rating")} {card.get("score")} 分')
@@ -54,8 +59,8 @@ def _score(t, m, card, er, date):
     if m['vr'] >= 1.5 and abs(m['chg']) >= max(1.5 * m['atrp'], 3):
         add(3, f'放量{"大升" if m["chg"] > 0 else "大跌"} {m["chg"]:+.1f}%（量 {m["vr"]:.1f}× 50 日均量）', 'opp' if m['chg'] > 0 else 'risk')
     elif m['vr'] >= 2: add(2, f'異常大量（{m["vr"]:.1f}× 50 日均量）')
-    if m['c'] > m['hi52']: add(2, f'收市創 52 週新高（舊高 {m["hi52"]:g}）', 'opp')
-    elif m['h'] > m['hi52']: add(1, f'日內創 52 週新高（舊高 {m["hi52"]:g}），收市回落')
+    if m['c'] > m['hi52']: add(2, f'收市創 52 週新高（舊高 {_n(m["hi52"])}）', 'opp')
+    elif m['h'] > m['hi52']: add(1, f'日內創 52 週新高（舊高 {_n(m["hi52"])}），收市回落')
     if m['s50'] and m['s200'] and c > m['s50'] > m['s200'] and m['s50'] > (m['s50p'] or 0) and m['s200'] > (m['s200p'] or 0):
         add(1, 'High-alpha 模板（股價＞50 天線＞200 天線，兩線向上）')
         if m['rng10'] <= 6: add(2, f'近 10 日波幅收窄至 {m["rng10"]:.1f}%（可能係 VCP 緊縮區）', 'opp')
