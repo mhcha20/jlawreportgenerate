@@ -72,6 +72,10 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
 #viewer .vbody { flex:1; overflow:auto; padding:12px; -webkit-overflow-scrolling:touch; }
 #viewer .vbody img { display:block; width:100%; max-width:900px; margin:0 auto 10px; background:#fff; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.3); }
 #viewer .vbody .mute { color:#eee; text-align:center; }
+.sglegend { font-size:13px; line-height:1.5; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:8px; }
+.sgtag { font-size:12px; padding:1px 6px; border-radius:10px; font-weight:600; white-space:nowrap; }
+.sgtag.opp { background:#e3f6e8; color:#137333; } .sgtag.risk { background:#fde7e7; color:#b3261e; } .sgtag.mix { background:#fff1d6; color:#8a5a00; }
+@media (prefers-color-scheme: dark) { .sgtag.opp { background:#16361f; color:#7fd99a; } .sgtag.risk { background:#3d1b1b; color:#f29b94; } .sgtag.mix { background:#3a2d10; color:#f0c36a; } }
 </style>
 </head>
 <body>
@@ -677,11 +681,15 @@ function drawSugg() {
   const top = sugg.filter(x => x.points > 0).slice(0, 15);
   if (!top.length) { $('sgList').innerHTML = '<div class="mute">今日冇特別值得出嘅（或者行情未更新）</div>'; $('sgPick').hidden = true; return; }
   $('sgPick').hidden = false; $('sgPick').textContent = `剔晒推介頭 ${n} 隻`;
-  $('sgList').innerHTML = top.map((x, i) => {
-    const st = by[x.ticker] || {}, icon = x.kinds.includes('risk') && x.kinds.includes('opp') ? '🟡' : x.kinds.includes('risk') ? '🔴' : x.kinds.includes('opp') ? '🟢' : '⚪';
+  const legend = '<div class="sglegend"><div>🟢 <b>機會</b>：升穿／接近順勢觸發、放量大升、創新高、波幅收窄</div><div>🔴 <b>風險</b>：跌穿／貼近減倉線或離場線、放量大跌（持倉要處理）</div><div>⚖️ <b>夾喺兩線之間</b>：上面就到觸發價、下面又貼近減倉線，就快揀方向。未持倉睇上面條線（升穿先考慮入），已持倉睇下面條線（跌穿跟計劃減倉）</div><div class="mute">分數只係排先後，唔係買賣建議。撳一行剔／取消。</div></div>';
+  $('sgList').innerHTML = legend + top.map((x, i) => {
+    const st = by[x.ticker] || {}, both = x.kinds.includes('risk') && x.kinds.includes('opp');
+    // 用戶 2026-11-07：🟡「兩樣都有」似自相矛盾 → 改 ⚖️＋字標「夾喺兩線之間」
+    const icon = both ? '⚖️' : x.kinds.includes('risk') ? '🔴' : x.kinds.includes('opp') ? '🟢' : '⚪';
+    const tag = both ? '<span class="sgtag mix">夾喺兩線之間</span>' : x.kinds.includes('risk') ? '<span class="sgtag risk">風險</span>' : x.kinds.includes('opp') ? '<span class="sgtag opp">機會</span>' : '';
     const done = st.done === 'site' ? ' · ✓已出' : st.done === 'drive' ? ' · ✓Drive' : st.done === 'busy' ? ' · 做緊' : '';
-    return `<div class="sgr${picked.has(x.ticker) ? ' on' : ''}" data-t="${esc(x.ticker)}">${i + 1}. ${icon} <b>${esc(x.ticker)}</b> ${esc(String(x.points))} 分 · ${x.chg > 0 ? '+' : ''}${esc(String(x.chg))}%${esc(done)}${i < n ? '' : ' <span class="mute">（頭 ' + n + ' 以外）</span>'}<div class="why">${esc(x.why.join('；'))}</div></div>`;
-  }).join('') + '<div class="mute">🟢 機會（升穿觸發、接近觸發、新高、收窄）· 🔴 風險（跌穿／貼近減倉、離場，持倉要處理）· 🟡 兩樣都有。撳一行剔／取消。' + (sugg.note ? esc(' ' + sugg.note) : '') + '</div>';
+    return `<div class="sgr${picked.has(x.ticker) ? ' on' : ''}" data-t="${esc(x.ticker)}">${i + 1}. ${icon} <b>${esc(x.ticker)}</b> ${tag} ${esc(String(x.points))} 分 · ${x.chg > 0 ? '+' : ''}${esc(String(x.chg))}%${esc(done)}${i < n ? '' : ' <span class="mute">（頭 ' + n + ' 以外）</span>'}<div class="why">${esc(x.why.join('；'))}</div></div>`;
+  }).join('') + (sugg.note ? '<div class="mute">' + esc(sugg.note) + '</div>' : '');
   $('sgList').querySelectorAll('.sgr').forEach(el => el.onclick = () => { const t = el.dataset.t; picked.has(t) ? picked.delete(t) : picked.add(t); drawStocks(); drawSugg(); });
 }
 $('sgBtn').onclick = async () => {
