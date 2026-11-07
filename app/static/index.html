@@ -127,13 +127,17 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       <div class="mute">撳掣之後 Mac 最多 30 秒內開始做；自動排程行緊時會等佢完先。截個股（富途）期間 Mac 唔好有人用。</div>
       <div class="row" style="margin-top:10px">
         <div><label for="cdate">日期</label><input type="date" id="cdate"></div>
-        <div style="flex:0"><button class="sec" id="cdUs" title="最近美股交易日">美股日</button></div>
-        <div style="flex:0"><button class="sec" id="cdAsia" title="最近亞洲交易日">亞洲日</button></div>
+        <div style="flex:0"><button class="sec" id="cdUs" title="填最近一個已收市嘅美股交易日">最近美股日</button></div>
+        <div style="flex:0"><button class="sec" id="cdAsia" title="填最近一個已收市嘅港股交易日">最近亞洲日</button></div>
       </div>
       <h3 class="ch">檢查</h3>
       <div class="cbtns"><button class="sec" data-act="check">檢查 Drive 齊唔齊</button><button class="sec" data-act="fill">檢查並自動補截欠嘅</button></div>
       <h3 class="ch">截股票</h3>
-      <div class="row"><div><input id="ctk" placeholder="代號，空格分開：AAPL NVDA 00700"></div></div>
+      <div class="cbtns"><button class="sec" id="cpWatch">⭐ 每日清單</button><button class="sec" id="cpMiss">揀截圖未齊／未有</button><button class="sec" id="cpClear">清除</button></div>
+      <div class="mute" id="cpMsg"></div>
+      <details id="cpAll"><summary class="mute" style="cursor:pointer">▸ 由股票清單逐隻撳揀</summary>
+        <input id="cpFind" placeholder="搵代號／名稱" style="margin-top:6px"><div class="chips" id="cpChips"></div></details>
+      <div class="row" style="margin-top:6px"><div><input id="ctk" placeholder="揀咗嘅股票會喺度出現（亦可以自己打，空格分開）"></div></div>
       <label class="chk"><input type="checkbox" id="ctkDate"> 用上面日期（唔剔＝每隻股票自己最近一個交易日）</label>
       <div class="cbtns"><button data-act="stocks">截呢幾隻股票</button></div>
       <h3 class="ch">截大盤</h3>
@@ -339,6 +343,8 @@ async function loadCapture(setDate) {
   clearTimeout(cTimer);
   let v; try { v = await api('/api/capture'); } catch (e) { $('cMac').innerHTML = `<span class="bad">讀唔到：${esc(e.message)}</span>`; return; }
   cDef = v.defaults || {};
+  if (cDef.us) $('cdUs').textContent = '最近美股日 ' + cDef.us.slice(5).replace('-', '/');
+  if (cDef.asia) $('cdAsia').textContent = '最近亞洲日 ' + cDef.asia.slice(5).replace('-', '/');
   if (setDate && !$('cdate').value) $('cdate').value = cDef.us || '';
   const m = v.mac || {};
   $('cMac').innerHTML = !v.token_set ? '<span class="warn">網站未設定 CAPTURE_TOKEN：Mac 要先行 bash mac/remote-setup.sh，再將 token 加入 Railway</span>'
@@ -371,8 +377,41 @@ document.querySelectorAll('#cardC [data-act]').forEach(b => b.onclick = async ()
   } catch (e) { $('cMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
   b.disabled = false; loadCapture();
 });
-$('cdUs').onclick = () => { if (cDef.us) $('cdate').value = cDef.us; };
-$('cdAsia').onclick = () => { if (cDef.asia) $('cdate').value = cDef.asia; };
+// 揀股票（唔使自己打）：每日清單／截圖未齊／由清單逐隻撳
+let cpRows = [], cpDate = '';
+const cpSet = () => new Set($('ctk').value.toUpperCase().split(/[\s,，、]+/).filter(Boolean));
+function cpWrite(set) { $('ctk').value = [...set].sort(codeCmp).join(' '); cpDraw(); }
+async function cpLoad() {
+  const d = $('cdate').value; if (!d) { $('cpMsg').textContent = '先揀日期'; return false; }
+  if (cpDate === d && cpRows.length) return true;
+  $('cpMsg').textContent = '讀取股票清單…';
+  try { cpRows = (await api('/api/stocks?date=' + d)).rows; cpDate = d; $('cpMsg').textContent = ''; return true; }
+  catch (e) { $('cpMsg').innerHTML = `<span class="bad">讀唔到股票清單：${esc(e.message)}</span>`; return false; }
+}
+function cpDraw() {
+  const sel = cpSet(), f = $('cpFind').value.trim().toLowerCase();
+  const rows = cpRows.filter(x => !f || x.ticker.toLowerCase().includes(f) || (x.name || '').toLowerCase().includes(f)).sort((a, b) => codeCmp(a.ticker, b.ticker));
+  $('cpChips').innerHTML = rows.map(x => `<button class="${sel.has(x.ticker) ? 'on' : ''}" data-t="${esc(x.ticker)}" title="${esc(x.name || '')}">${esc(x.ticker)}${x.status === 'ok' ? '' : ' ⚠'}</button>`).join('') || '<span class="mute">冇符合</span>';
+  $('cpChips').querySelectorAll('button').forEach(b => b.onclick = () => { const s2 = cpSet(); s2.has(b.dataset.t) ? s2.delete(b.dataset.t) : s2.add(b.dataset.t); cpWrite(s2); });
+}
+$('cpAll').ontoggle = async () => { if ($('cpAll').open && await cpLoad()) cpDraw(); };
+$('cpFind').oninput = cpDraw;
+$('ctk').oninput = () => { if ($('cpAll').open) cpDraw(); };
+$('cpClear').onclick = () => cpWrite(new Set());
+$('cpWatch').onclick = async () => {
+  if (!watch.length) await loadWatch();
+  const s2 = cpSet(); watch.forEach(t => s2.add(t)); cpWrite(s2);
+  $('cpMsg').textContent = `已加入每日清單 ${watch.length} 隻`;
+};
+$('cpMiss').onclick = async () => {
+  if (!await cpLoad()) return;
+  const miss = cpRows.filter(x => x.status !== 'ok').map(x => x.ticker);
+  const s2 = cpSet(); miss.forEach(t => s2.add(t)); cpWrite(s2);
+  $('cpMsg').textContent = miss.length ? `${cpDate} 截圖未齊／未有：${miss.length} 隻（假期冇開市嘅市場都會計入，撳開清單可以剔走）` : `${cpDate} 全部股票截圖齊晒 ✓`;
+};
+$('cdate').addEventListener('change', () => { cpRows = []; cpDate = ''; if ($('cpAll').open) cpLoad().then(ok => ok && cpDraw()); });
+$('cdUs').onclick = () => { if (cDef.us) { $('cdate').value = cDef.us; $('cdate').dispatchEvent(new Event('change')); } };
+$('cdAsia').onclick = () => { if (cDef.asia) { $('cdate').value = cDef.asia; $('cdate').dispatchEvent(new Event('change')); } };
 const MKTN = {hk: '香港', jp: '日本', kr: '韓國'};
 const kindName = j => j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : j.kind === 'amarket' ? (MKTN[j.ticker] || esc(j.ticker)) + '大盤報告' : '大盤報告';
 const ST = {queued: ['排隊中', 'warn'], running: ['進行中', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad'], cancelled: ['已取消', '']};
