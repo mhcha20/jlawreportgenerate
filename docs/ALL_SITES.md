@@ -1,6 +1,6 @@
 # 所有網站一覽（mhcha20）
 
-最後整理：2026-11-06。呢份同一份內容放咗喺每個 repo 嘅 `docs/ALL_SITES.md`，改咗其中一個記得同步其他（或者只改呢度註明邊個最新）。
+最後整理：2026-11-07（報告生成器同截圖兩行有更新；其他 repo 嘅副本仍係 2026-11-06 版）。呢份同一份內容放咗喺每個 repo 嘅 `docs/ALL_SITES.md`，改咗其中一個記得同步其他（或者只改呢度註明邊個最新）。
 每個網站自己嘅詳細資料睇該 repo 嘅 `CLAUDE.md`（Claude Code 開 repo 會自動讀）。
 
 ## 共通做法（所有網站）
@@ -17,8 +17,8 @@
 | 網站 | 用途 | Repo（公開？） | 部署 branch | 網址 | Railway project | 資料儲存 |
 |---|---|---|---|---|---|---|
 | JLaw 報告中心 | 列 Drive 股票報告、WhatsApp 分享、截圖檢查、買賣訊號、回測、群友對照 | `mhcha20/Jlaw-report`（公開） | `claude/drive-reports-whatsapp-share-6m44wo`（AI session 唔准直接 push，要開 PR） | jlaw-report-a74806.up.railway.app | `jlaw-report` | Volume `/data` |
-| JLaw 報告生成器 | 撳掣用 Claude／Grok 出大盤報告同個股三份報告 | `mhcha20/jlawreportgenerate`（公開） | `main` | jlawreportgenerate-production.up.railway.app | `loving-renewal` | Volume `/data` |
-| 截圖自動化 | 每日 TradingView 大盤圖＋富途牛牛個股截圖，上載 Google Drive（俾上面兩個網站用） | `mhcha20/screencapture`（私人） | 唔喺 Railway；行喺雲端電腦（systemd timer），見該 repo | — | — | Google Drive |
+| JLaw 報告生成器 | 撳掣（或每日排程）用 Claude／Grok／Gemini 出美股大盤、香港／日本／韓國大盤同個股三份報告；J Law 報告上載；📸 網頁遙控 Mac 截圖 | `mhcha20/jlawreportgenerate`（公開） | `main` | jlawreportgenerate-production.up.railway.app | `loving-renewal` | Volume `/data` |
+| 截圖自動化 | 每日 TradingView 大盤圖＋富途牛牛個股截圖，上載 Google Drive（俾上面兩個網站用） | `mhcha20/screencapture`（私人） | `claude/magical-darwin-u4oie2`（唔喺 Railway；行喺 **Mac mini**（launchd），`bash mac/update.sh` 更新） | — | — | Google Drive |
 | 2027 鄉郊選舉指引問答 | 選管會指引搜尋＋Claude 回答、提名表格遮蓋工具、重要日子 | `mhcha20/2027ruralelection`（公開） | `main` | web-production-81c64.up.railway.app（全站 Basic auth） | `2027ruralelection` | Volume `/data`（遮蓋範本） |
 | 北海道旅行紀錄 | 支出、日記、行程、訂位、想去地點（收據 AI 讀圖、連結匯入、Google 相片） | `mhcha20/travellingtrip`（公開） | `claude/trusting-galileo-l0hhih` | web-production-0a671.up.railway.app（Google 登入） | `travellingtrip` | Postgres |
 | 外賣紀錄 | 上傳 Keeta 截圖 → AI 讀圖入庫 → 收入／時數／距離分析 | `mhcha20/food-delivery-records`（私人） | `master` | web-production-0943b.up.railway.app（Google／密碼登入） | `food-delivery-records` | Postgres |

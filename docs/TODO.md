@@ -19,10 +19,14 @@
 
 - [ ] **推介**（2026-11-06 加）：11/05 試計頭幾名 2640、7832（升穿觸發＋放量新高）、GRID、PANW、AIPO（跌穿離場／減倉）。用一兩星期睇推介準唔準、權重要唔要調（`app/suggest.py` `_score`）；業績日只喺 Railway 有 Longbridge 時先計。
 
-- [ ] **亞洲大盤報告**（2026-11-06 加，未出過真報告）：要等 Mac `bash mac/update.sh` 之後 17:15 排程（或手動 `capture_market_charts.py --market hk`）上載 `HK`／`JP`／`KR` 截圖。第一份出咗要睇：AI 有冇照美股範本結構寫、篇幅門檻（`gen/amarket/format_check.py`）要唔要調、build 次數同用量、廣度／資金流有冇上網核實到。2026-11-06 第一份香港（Gemini，1 次 build，US$0.72，14 頁＝上限）。同日加咗：自動排程（17:30–21:30）、亞洲股個股承襲同市場大盤報告、J Law 觀點（選填）。下一個交易日睇排程有冇自動出三份、用量、J Law 一節寫成點。
+- [ ] **亞洲大盤報告**（2026-11-06 加，未出過真報告）：要等 Mac `bash mac/update.sh` 之後 17:15 排程（或手動 `capture_market_charts.py --market hk`）上載 `HK`／`JP`／`KR` 截圖。第一份出咗要睇：AI 有冇照美股範本結構寫、篇幅門檻（`gen/amarket/format_check.py`）要唔要調、build 次數同用量、廣度／資金流有冇上網核實到。2026-11-06 三份都出咗並上載（全部 Gemini）：香港 1 次 build US$0.72；韓國 US$0.87；日本兩次中途卡住（Gemini 搜尋 120 秒超時、寫 work 檔前 >5 分鐘冇資料 → 改 300 秒搜尋限時、900 秒串流限時、思考中都撳得停），之後發現 Yahoo 1321／1306 價格比例錯誤再重做，最終 14 頁、均線同量比正確。三份都 14–15 頁，篇幅標準等用戶睇完再定。同日加咗：自動排程（17:30–21:30）、亞洲股個股承襲同市場大盤報告、J Law 觀點（選填）。下一個交易日睇排程有冇自動出三份、用量、J Law 一節寫成點。
 
 - [ ] **升跌符號同顏色**（2026-11-06）：美股＋亞洲大盤報告改 ▲ 綠／▼ 紅（`mlib`／`alib` 嘅 `P／N／AR`）。Jlaw-report `tools/stockreport/market/mlib.py` 未同步（舊排程仲用 ＋）；個股報告（`gen/lib.py` 等）未改，用戶未要求。下一份睇 AI 自己寫嘅文字有冇跟 ▲／▼。
-- [ ] **J Law 報告上載**（2026-11-06 加）：網頁卡 →`/api/jlaw_upload`。第一份 JLawStock 5 Nov 2026 等用戶喺網站上載；之後睇美股大盤報告有冇讀到（log「J Law 觀點材料：…」）。亞洲大盤同個股報告暫時唔用 J Law 材料。
+- [x] **J Law 報告上載**（2026-11-06 加）：網頁卡 →`/api/jlaw_upload`。用戶 11/06 上載咗 JLawStock 5 Nov 2026（Drive 檔名 `2026-11-05_JLaw_Stock_5Nov2026_readable.pdf`，只限擁有者，冇公開分享）；11/06 日本／韓國大盤報告 log 已讀到 3 份 J Law 材料並寫咗 J Law 一節。個股報告暫時唔用 J Law 材料。
+- [ ] **自動上載**（2026-11-06）：Railway 已開 `AUTO_UPLOAD=1`（重新部署 23:58 生效）。第一次排程（11/07 星期六朝早美股 11/06 大盤）要睇報告紀錄有冇「已上載 Drive：檔名」。
+- [ ] **出個股前檢查大盤報告**（2026-11-06）：`/api/market_ready` ＋ confirm。本機用真 Drive 資料試過（11/06 美股未有 → 彈；港股有 → 唔彈），正式網站未見用戶撳過。
+- [ ] **📸 網頁遙控 Mac 截圖**（2026-11-07 加）：網站分頁＋`app/capture.py`＋screencapture `bin/remote_agent.py`。雲端用模擬 Mac 試過：排隊、執行、log、一隻失敗其餘照做、停止、壞代號／錯 token 被拒；正式網站錯 token 回 401。**未喺真 Mac 試**：要用戶行 `bash mac/remote-setup.sh`、將 token 貼入 Railway `CAPTURE_TOKEN`，網頁見到「🟢 Mac 在線」先算通。要留意：Mac Python 有冇 CA 證書（冇就自動改用 curl）、`update` 動作完之後 launchd 有冇重開 agent。
+- [ ] **網頁報告紀錄**（2026-11-07）：每次顯示 10 份＋「顯示多 10 份」、錯誤兩行、J Law 卡收埋、分頁掣固定頂部；「重做全部失敗」只喺失敗篩選出現，要再輸入份數先做（用戶怕撳錯）。
 
 ## 用戶提過、可以做
 - [ ] **報告中心「📸 截圖檢查」日期**：只加香港「當日」，過咗午夜就睇唔到上一個亞洲交易日（例如 11/06 凌晨睇唔到 11/05）。改法同本站 `jlaw.stock_dates()`（加最近幾個工作日）。要喺 Jlaw-report 開 PR 俾用戶 merge。
@@ -47,7 +51,7 @@
 - Grok 每份去到 US$7–10：Grok（store:false）每輪重送成段對話連截圖，`inspect_data` 用 12 次就貴好多。已改：Grok 最多 3 次（`INSPECT_MAX_GROK`）。之後量一份睇返用量。
 
 ## 要記住嘅坑
-- **Yahoo 價格比例錯誤**（2026-11-06 日本報告 AI 發現）：1321 10/05–06 收 7.28／7.35（正常約 710，量大 100 倍）、1306 03/30–31 收 37.6（細 10 倍）；`/api/ohlcv`（報告中心）原樣傳出。`gen/amarket/prep.py fix_scale()` 同前後 5 根中位數比、接近 10 嘅次方就還原並寫 warn。掃過 115 隻個股同美股／港韓大盤數據冇其他（BMNR 2025-06 係真實急升）。報告中心 `prices.js`／`mergeOhlcv` 未修（個股 prep、推介、回測都用佢），要喺 Jlaw-report 改先根治。
+- **Yahoo 價格比例錯誤**（2026-11-06 日本報告 AI 發現）：1321 10/05–06 收 7.28／7.35（正常約 710，量大 100 倍）、1306 03/30–31 收 37.6（細 10 倍）；`/api/ohlcv`（報告中心）原樣傳出。`gen/amarket/prep.py fix_scale()` 同前後 5 根中位數比、接近 10 嘅次方就還原並寫 warn。掃過 115 隻個股同美股／港韓大盤數據冇其他（BMNR 2025-06 係真實急升）。報告中心 `prices.js`／`mergeOhlcv` 已經喺 Jlaw-report PR #9（2026-11-06 用戶 merge）加 `fixScale()` 根治，`/api/ohlcv` 而家 1321 10/05 收 727.90。
 - **Yahoo 指數收市後 close＝null**（2026-11-06 ^N225）：`gen/amarket/prep.py yahoo_index` 用 `regularMarketPrice` 補（`regularMarketTime` ≥ 開市 6.4 小時後），同報告中心 `fillMissingClose` 一樣。
 - 部署（push 或者改 Railway Variables）會中斷做緊嘅 job；出緊報告就唔好部署。
 - `gen/market/data` 係共用目錄，大盤 job 一定要一次一份（`MARKET_LOCK`）。
@@ -56,4 +60,6 @@
 - repo 係公開嘅：唔好提交密碼、金鑰、token、J Law 私人材料、每隻股票嘅分析內容（work 檔）。`docs/MYT-jlaw-notes-260923.pdf` 係用戶要求放入嘅。
 
 ## 已完成（摘要）
+- 2026-11-07：網頁短咗（報告紀錄分頁顯示、J Law 卡收埋、重做全部雙重確認）；📸 網頁遙控 Mac 截圖（待 Mac 設定）。
+- 2026-11-06：Longbridge 直連（個股＋大盤）、Gemini 引擎、承襲價位規則（失效重訂、跌穿當日照舊、價位次序）、推介、Grok 慳費用、亞洲大盤報告（香港／日本／韓國框架、網頁分頁、自動排程、J Law 一節、亞洲個股承襲）、升跌 ▲ 綠／▼ 紅、J Law 上載、出個股前檢查大盤報告、AUTO_UPLOAD、Yahoo 價格比例錯誤還原（亞洲 prep＋報告中心 PR #9 已 merge）、Gemini 超時／停止修正。
 - 2026-11-05：大盤報告網站、Grok 後備（Responses API＋上網）、10/30 大盤格式範本＋擋位、J Law 對照、個股三份報告（ESTC 範本＋擋位、signals.js 解析）、ADR 外國股截圖規則（兩邊）、評等同分數對應（兩邊）、PDF 同一版閱讀、個股排序／篩選／行業分組、亞洲股日期、每日清單。
