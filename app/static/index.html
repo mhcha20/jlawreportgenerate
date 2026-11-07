@@ -28,6 +28,8 @@ button:disabled { opacity:.45; cursor:default; }
 .job { border-top:1px solid var(--line); padding:10px 0; } .job:first-of-type { border-top:0; }
 .job .hd { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
 .st { font-size:12px; padding:1px 8px; border-radius:10px; border:1px solid currentColor; }
+.cbtns { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0; } .cbtns button { width:auto; flex:0 1 auto; }
+h3.ch { font-size:14px; margin:14px 0 4px; } .cdot { font-weight:700; }
 .log { font:12px/1.5 ui-monospace, Menlo, monospace; background:var(--bg); border-radius:8px; padding:8px; margin-top:8px; max-height:260px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
 .acts { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
 .mute { color:var(--mute); font-size:13px; }
@@ -39,7 +41,7 @@ html, body { overflow-x:hidden; } main, .card, .job { min-width:0; max-width:100
 .who { font-size:12px; color:var(--mute); margin-bottom:10px; } .who a { color:var(--pri); }
 .tabs { display:flex; gap:6px; margin-bottom:12px; position:sticky; top:0; z-index:5; background:var(--bg); padding:6px 0; }
 .clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-details.card > summary { cursor:pointer; list-style:none; } details.card > summary::-webkit-details-marker { display:none; } details.card[open] > summary .mute { display:none; } .tabs button { flex:1; background:transparent; color:var(--pri); border:1px solid var(--pri); }
+details.card > summary { cursor:pointer; list-style:none; } details.card > summary::-webkit-details-marker { display:none; } details.card[open] > summary .mute { display:none; } .tabs button { flex:1; background:transparent; color:var(--pri); border:1px solid var(--pri); padding:9px 2px; font-size:14px; white-space:nowrap; min-width:0; }
 .tabs button.on { background:var(--pri); color:#fff; }
 .slist { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:6px; margin-top:10px; max-height:340px; overflow:auto; }
 .slist label { display:flex; gap:5px; align-items:center; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:5px 7px; color:var(--ink); margin:0; }
@@ -88,7 +90,7 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
     <div class="who" id="who"></div>
     <div class="sub">由 Google Drive 截圖自動出大盤同個股報告 · AI 睇圖分析、上網核實 · QA 全過先出 PDF</div>
 
-    <div class="tabs"><button id="tabM" class="on">大盤報告</button><button id="tabA">亞洲大盤</button><button id="tabS">個股報告</button></div>
+    <div class="tabs"><button id="tabM" class="on">大盤報告</button><button id="tabA">亞洲大盤</button><button id="tabS">個股報告</button><button id="tabC">📸 截圖</button></div>
     <div class="card" id="cardM">
       <h2>出大盤報告</h2>
       <div class="row">
@@ -117,6 +119,33 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       <button class="big" id="ago" disabled>出報告</button>
       <div class="msg" id="agoMsg"></div>
       <div class="mute" style="margin-top:6px">三個市場各出一份（剔幾多個出幾多份）。截圖係 TradingView 完整圖表頁（冇均線，均線由行情重算）；廣度、資金流、日韓波動指數未有固定來源，報告會標缺或上網核實。每份約 US$2–6。</div>
+    </div>
+
+    <div class="card" id="cardC" hidden>
+      <h2>📸 遙控 Mac 截圖</h2>
+      <div class="msg" id="cMac">讀取中…</div>
+      <div class="mute">撳掣之後 Mac 最多 30 秒內開始做；自動排程行緊時會等佢完先。截個股（富途）期間 Mac 唔好有人用。</div>
+      <div class="row" style="margin-top:10px">
+        <div><label for="cdate">日期</label><input type="date" id="cdate"></div>
+        <div style="flex:0"><button class="sec" id="cdUs" title="最近美股交易日">美股日</button></div>
+        <div style="flex:0"><button class="sec" id="cdAsia" title="最近亞洲交易日">亞洲日</button></div>
+      </div>
+      <h3 class="ch">檢查</h3>
+      <div class="cbtns"><button class="sec" data-act="check">檢查 Drive 齊唔齊</button><button class="sec" data-act="fill">檢查並自動補截欠嘅</button></div>
+      <h3 class="ch">截股票</h3>
+      <div class="row"><div><input id="ctk" placeholder="代號，空格分開：AAPL NVDA 00700"></div></div>
+      <label class="chk"><input type="checkbox" id="ctkDate"> 用上面日期（唔剔＝每隻股票自己最近一個交易日）</label>
+      <div class="cbtns"><button data-act="stocks">截呢幾隻股票</button></div>
+      <h3 class="ch">截大盤</h3>
+      <div class="cbtns"><button class="sec" data-act="us_market">截美股大盤 19 張</button></div>
+      <div class="cbtns"><label class="chk"><input type="checkbox" class="cmk" value="hk" checked> 香港</label><label class="chk"><input type="checkbox" class="cmk" value="jp" checked> 日本</label><label class="chk"><input type="checkbox" class="cmk" value="kr" checked> 韓國</label>
+        <button class="sec" data-act="asia_market">截亞洲大盤</button></div>
+      <h3 class="ch">重跑排程／維修</h3>
+      <div class="cbtns"><button class="sec" data-act="rerun_morning">重跑朝早美股排程</button><button class="sec" data-act="rerun_asia">重跑 17:15 亞洲排程</button>
+        <button class="sec" data-act="fix_display">修正螢幕解像度</button><button class="sec" data-act="update">更新 Mac 程式</button></div>
+      <div class="msg" id="cMsg"></div>
+      <h3 class="ch">最近動作</h3>
+      <div id="cList"><div class="mute">載入中…</div></div>
     </div>
 
     <div class="card" id="cardS" hidden>
@@ -288,6 +317,62 @@ $('jgo').onclick = async () => {
   } catch (e) { $('jmsg').innerHTML = `<span class="bad">上載失敗：${esc(e.message)}</span>`; }
   jState();
 };
+// ---- 📸 遙控 Mac 截圖（capture.py；Mac 上 screencapture bin/remote_agent.py 每 30 秒攞動作）
+let cDef = {}, cTimer = null, cOpen = new Set();
+const CST = {queued: ['排隊中', 'warn'], running: ['Mac 做緊', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad'], cancelled: ['已停止', '']};
+const CONFIRM = {fill: '檢查完會自動補截所有欠嘅截圖（可能要用富途好耐）。', stocks: '截股票要用富途，每隻約 2–3 分鐘。',
+  rerun_morning: '重跑朝早美股排程：大盤＋美股個股，大約 3–4 個鐘。', rerun_asia: '重跑 17:15 亞洲排程：亞洲大盤＋亞洲個股，大約 1 個鐘。', update: '由 GitHub 更新 Mac 截圖程式。'};
+function cParams(act) {
+  const d = $('cdate').value;
+  if (act === 'stocks') return {tickers: $('ctk').value, date: $('ctkDate').checked ? d : ''};
+  if (act === 'asia_market') return {markets: [...document.querySelectorAll('.cmk:checked')].map(x => x.value), date: d};
+  return ['check', 'fill', 'us_market'].includes(act) ? {date: d} : {};
+}
+function cDesc(t) {
+  const p = t.params || {}, bits = [];
+  if (p.tickers) bits.push(p.tickers.join(' '));
+  if (p.markets) bits.push(p.markets.map(m => MKTN[m] || m).join('／'));
+  if (p.date) bits.push(p.date);
+  return esc(t.label) + (bits.length ? '：' + esc(bits.join('｜')) : '');
+}
+async function loadCapture(setDate) {
+  clearTimeout(cTimer);
+  let v; try { v = await api('/api/capture'); } catch (e) { $('cMac').innerHTML = `<span class="bad">讀唔到：${esc(e.message)}</span>`; return; }
+  cDef = v.defaults || {};
+  if (setDate && !$('cdate').value) $('cdate').value = cDef.us || '';
+  const m = v.mac || {};
+  $('cMac').innerHTML = !v.token_set ? '<span class="warn">網站未設定 CAPTURE_TOKEN：Mac 要先行 bash mac/remote-setup.sh，再將 token 加入 Railway</span>'
+    : m.online ? `<span class="ok cdot">🟢 Mac 在線</span> <span class="mute">${esc(m.host || '')} · ${m.age} 秒前聯絡 · 程式 ${esc(m.version || '?')}${m.busy ? ' · 忙：' + esc(m.busy) : ''}</span>`
+    : `<span class="bad cdot">🔴 Mac 離線</span> <span class="mute">${m.at ? '最後聯絡 ' + esc(m.at.replace('T', ' ').slice(0, 16)) : '從未聯絡過'}（排咗嘅動作會等 Mac 返嚟先做）</span>`;
+  const ts = v.tasks.slice(0, 15);
+  $('cList').innerHTML = ts.length ? ts.map(t => {
+    const [st, c] = CST[t.status] || [t.status, ''];
+    return `<div class="job"><div class="hd"><b>${cDesc(t)}</b><span class="st ${c}">${st}</span></div>
+      <div class="mute">${esc(t.created)}${t.finished ? ' → ' + esc(t.finished.slice(11)) : ''}${t.summary ? ' · ' + esc(t.summary) : ''}</div>
+      <div class="acts">${t.log ? `<button class="sec" onclick="cToggle('${t.id}')">紀錄</button>` : ''}${t.status === 'queued' || t.status === 'running' ? `<button class="sec" onclick="cCancel('${t.id}', this)">${t.status === 'queued' ? '取消' : '停止'}</button>` : ''}</div>
+      <div class="log" id="clog-${t.id}" ${cOpen.has(t.id) ? '' : 'hidden'}>${esc(t.log || '')}</div></div>`;
+  }).join('') : '<div class="mute">未有動作</div>';
+  for (const id of cOpen) { const el = $('clog-' + id); if (el) el.scrollTop = el.scrollHeight; }
+  const active = v.tasks.some(t => t.status === 'queued' || t.status === 'running');
+  if (!$('cardC').hidden) cTimer = setTimeout(loadCapture, active ? 5000 : 20000);
+}
+function cToggle(id) { cOpen.has(id) ? cOpen.delete(id) : cOpen.add(id); loadCapture(); }
+async function cCancel(id, btn) {
+  if (!confirm('停止呢個動作？做緊嘅會喺 15 秒內停（已截好嘅照樣保留）。')) return;
+  btn.disabled = true; try { await api(`/api/capture/${id}/cancel`, {method: 'POST', body: '{}'}); } catch (e) { alert(e.message); } loadCapture();
+}
+document.querySelectorAll('#cardC [data-act]').forEach(b => b.onclick = async () => {
+  const act = b.dataset.act, params = cParams(act);
+  if (CONFIRM[act] && !confirm(CONFIRM[act] + '\n確定？')) return;
+  b.disabled = true; $('cMsg').textContent = '';
+  try {
+    const r = await api('/api/capture', {method: 'POST', body: JSON.stringify({action: act, params})});
+    $('cMsg').innerHTML = r.created ? '<span class="ok">已排隊，Mac 30 秒內會開始</span>' : '<span class="warn">一樣嘅動作已經排緊／做緊</span>';
+  } catch (e) { $('cMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  b.disabled = false; loadCapture();
+});
+$('cdUs').onclick = () => { if (cDef.us) $('cdate').value = cDef.us; };
+$('cdAsia').onclick = () => { if (cDef.asia) $('cdate').value = cDef.asia; };
 const MKTN = {hk: '香港', jp: '日本', kr: '韓國'};
 const kindName = j => j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : j.kind === 'amarket' ? (MKTN[j.ticker] || esc(j.ticker)) + '大盤報告' : '大盤報告';
 const ST = {queued: ['排隊中', 'warn'], running: ['進行中', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad'], cancelled: ['已取消', '']};
@@ -407,11 +492,12 @@ function chk(at) {   // 最近檢查時間（香港時間）
   return ` <span class="mute">· 最近檢查 ${esc(f)}（香港）</span>`;
 }
 function tab(which) {
-  for (const k of ['M', 'A', 'S']) { $('tab' + k).classList.toggle('on', which === k); $('card' + k).hidden = which !== k; }
+  for (const k of ['M', 'A', 'S', 'C']) { $('tab' + k).classList.toggle('on', which === k); $('card' + k).hidden = which !== k; }
   if (which === 'S' && !stocks.length) loadStocks();
   if (which === 'A') checkAsia();
+  if (which === 'C') loadCapture(true);
 }
-$('tabM').onclick = () => tab('M'); $('tabA').onclick = () => tab('A'); $('tabS').onclick = () => tab('S');
+$('tabM').onclick = () => tab('M'); $('tabA').onclick = () => tab('A'); $('tabS').onclick = () => tab('S'); $('tabC').onclick = () => tab('C');
 async function loadStocks() {
   const d = $('sdate').value; if (!d) return; $('sMsg').textContent = '檢查個股截圖中…'; $('slist').innerHTML = '';
   try {

@@ -288,6 +288,12 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/watchlist': return s._send(200, {'tickers': watchlist()})
+        if p == '/api/capture':   # 網頁遙控 Mac 截圖：狀態＋最近動作＋預設日期
+            import capture
+            v = capture.view(DATA)
+            try: v['defaults'] = {'us': jlaw.last_us_trading_day(), 'asia': jlaw.stock_dates([])[1]}
+            except Exception: v['defaults'] = {}
+            return s._send(200, v)
         if p == '/api/market_ready':   # 出個股前：同市場當日大盤報告上載咗 Drive 未？（未有就網頁先問）
             d = (q.get('date') or [''])[0]; ts = [x for x in (q.get('tickers') or [''])[0].split(',') if x]
             if not re.fullmatch(r'\d{4}-\d\d-\d\d', d): return s._send(400, {'error': '日期要 YYYY-MM-DD'})
@@ -316,6 +322,17 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(s):
         p = urlparse(s.path).path
+        if p.startswith('/api/capture/agent/'):   # Mac 截圖代理（screencapture bin/remote_agent.py）：用 CAPTURE_TOKEN，唔使 Google 登入
+            import capture
+            if not capture.token_ok(s.headers.get('x-capture-token', '')): return s._send(401, {'error': 'bad token'})
+            n = int(s.headers.get('Content-Length') or 0)
+            if n > 1 << 20: return s._send(413, {'error': 'too large'})
+            try: body = json.loads(s.rfile.read(n) or b'{}') if n else {}
+            except Exception: return s._send(400, {'error': 'bad json'})
+            if p == '/api/capture/agent/poll': return s._send(200, capture.poll(DATA, body))
+            m = re.fullmatch(r'/api/capture/agent/([\w-]+)/progress', p)
+            if m: return s._send(200, capture.progress(DATA, m.group(1), body))
+            return s._send(404, {'error': 'not found'})
         if not (PW or auth.google_on()): return s._send(503, {'error': '伺服器未設定登入方式（GOOGLE_CLIENT_ID 或 GEN_PASSWORD）'})
         if not s._authed(): return s._send(401, {'error': '未登入'})
         n = int(s.headers.get('Content-Length') or 0)
@@ -332,6 +349,16 @@ class H(BaseHTTPRequestHandler):
             return s._send(200, {'ok': True, 'name': name, 'result': r})
         body = json.loads(s.rfile.read(n) or b'{}') if n else {}
         if p == '/api/auth': return s._send(200, {'ok': True})
+        if p == '/api/capture':   # 排一個截圖動作俾 Mac
+            import capture
+            try: t, created = capture.add(DATA, str(body.get('action', '')), body.get('params') or {}, s._user() or '網頁')
+            except ValueError as e: return s._send(400, {'error': str(e)})
+            return s._send(200, {'task': t, 'created': created})
+        m = re.fullmatch(r'/api/capture/([\w-]+)/cancel', p)
+        if m:
+            import capture
+            try: return s._send(200, {'task': capture.cancel(DATA, m.group(1))})
+            except ValueError as e: return s._send(400, {'error': str(e)})
         if p == '/api/watchlist':   # 每日清單（存喺 volume，所有裝置共用）
             ts = []
             for x in body.get('tickers') or []:
