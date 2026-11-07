@@ -76,6 +76,8 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
 .sgtag { font-size:12px; padding:1px 6px; border-radius:10px; font-weight:600; white-space:nowrap; }
 .sgtag.opp { background:#e3f6e8; color:#137333; } .sgtag.risk { background:#fde7e7; color:#b3261e; } .sgtag.mix { background:#fff1d6; color:#8a5a00; }
 @media (prefers-color-scheme: dark) { .sgtag.opp { background:#16361f; color:#7fd99a; } .sgtag.risk { background:#3d1b1b; color:#f29b94; } .sgtag.mix { background:#3a2d10; color:#f0c36a; } }
+.cdrow { margin-top:10px; } .cdrow input[type=date] { display:block; width:100%; max-width:100%; min-width:0; box-sizing:border-box; -webkit-appearance:none; appearance:none; min-height:42px; }
+.cdbtns { display:flex; gap:8px; margin-top:8px; } .cdbtns button { flex:1; width:auto; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -131,10 +133,9 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       <h2>📸 遙控 Mac 截圖</h2>
       <div class="msg" id="cMac">讀取中…</div>
       <div class="mute">撳掣之後 Mac 最多 30 秒內開始做；自動排程行緊時會等佢完先。截個股（富途）期間 Mac 唔好有人用。</div>
-      <div class="row" style="margin-top:10px">
-        <div><label for="cdate">日期</label><input type="date" id="cdate"></div>
-        <div style="flex:0"><button class="sec" id="cdUs" title="填最近一個已收市嘅美股交易日">最近美股日</button></div>
-        <div style="flex:0"><button class="sec" id="cdAsia" title="填最近一個已收市嘅港股交易日">最近亞洲日</button></div>
+      <div class="cdrow">   <!-- 用戶 2026-11-07：iPhone 日期格同掣疊埋，改成日期一行、兩粒掣一行 -->
+        <label for="cdate">日期</label><input type="date" id="cdate">
+        <div class="cdbtns"><button class="sec" id="cdUs" title="填最近一個已收市嘅美股交易日">最近美股日</button><button class="sec" id="cdAsia" title="填最近一個已收市嘅港股交易日">最近亞洲日</button></div>
       </div>
       <h3 class="ch">檢查</h3>
       <div class="cbtns"><button class="sec" data-act="check">檢查 Drive 齊唔齊</button><button class="sec" data-act="fill">檢查並自動補截欠嘅</button></div>
