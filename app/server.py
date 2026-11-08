@@ -63,13 +63,14 @@ def all_jobs():
 ENGINES = ('auto', 'gemini', 'grok')
 
 
-def new_job(date, by='網頁', upload=False, kind='market', ticker=None, engine='auto'):
+def new_job(date, by='網頁', upload=False, kind='market', ticker=None, engine='auto', parts='all'):
     for j in all_jobs():
         if j['date'] == date and j.get('kind', 'market') == kind and j.get('ticker') == ticker and j['status'] in ('queued', 'running'): return j, False
     jid = dt.datetime.now(HKZ).strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:4]
     os.makedirs(os.path.join(JOBS, jid))
     j = dict(id=jid, kind=kind, ticker=ticker, date=date, status='queued', created=now(), by=by, auto_upload=upload, log=[], pdf=None, pdfs=[], cost=0, uploaded=None,
              engine_pref=engine if engine in ENGINES else 'auto')
+    if kind == 'stock' and parts == 'card': j['parts'] = 'card'   # 只出行動卡（用戶 2026-11-08 要求可以揀）
     save(j); Q.put(jid); return j, True
 
 
@@ -102,7 +103,7 @@ def _run(j, agent, stock):
         def log(msg):
             j['log'].append(f'{dt.datetime.now(HKZ):%H:%M:%S} {msg}'); save(j); print(jid, msg, flush=True)
         folder = os.path.join(JOBS, jid)
-        if j.get('kind') == 'stock': job = stock.StockJob(jid, j['date'], j['ticker'], folder, log)
+        if j.get('kind') == 'stock': job = stock.StockJob(jid, j['date'], j['ticker'], folder, log, card_only=j.get('parts') == 'card')
         elif j.get('kind') == 'amarket':
             import asia
             job = asia.AsiaJob(jid, j['date'], j['ticker'], folder, log)   # ticker＝市場 hk／jp／kr
@@ -403,7 +404,8 @@ class H(BaseHTTPRequestHandler):
             if body.get('kind') == 'stock':
                 ts = [str(x).strip().upper() for x in body.get('tickers') or [] if re.fullmatch(r'[A-Za-z0-9.]{1,10}', str(x).strip())]
                 if not ts: return s._send(400, {'error': '揀最少一隻股票'})
-                made = [new_job(d, upload=bool(body.get('upload')), kind='stock', ticker=t_, engine=eng) for t_ in ts]
+                parts = 'card' if body.get('parts') == 'card' else 'all'
+                made = [new_job(d, upload=bool(body.get('upload')), kind='stock', ticker=t_, engine=eng, parts=parts) for t_ in ts]
                 return s._send(200, {'jobs': [j_['id'] for j_, _ in made], 'created': sum(1 for _, c in made if c)})
             j, created = new_job(d, upload=bool(body.get('upload')), engine=eng)
             return s._send(200, {'job': j['id'], 'created': created})
@@ -413,7 +415,7 @@ class H(BaseHTTPRequestHandler):
             if not j: return s._send(404, {'error': '冇呢個 job'})
             if j['status'] in ('queued', 'running'): return s._send(400, {'error': '仲做緊／排緊隊'})
             nj, created = new_job(j['date'], upload=bool(body.get('upload', j.get('auto_upload'))), kind=j.get('kind', 'market'), ticker=j.get('ticker'),
-                                  engine=str(body.get('engine') or j.get('engine_pref') or 'auto'))
+                                  engine=str(body.get('engine') or j.get('engine_pref') or 'auto'), parts=j.get('parts', 'all'))
             return s._send(200, {'job': nj['id'], 'created': created})
         m = re.fullmatch(r'/api/jobs/([\w-]+)/cancel', p)
         if m:

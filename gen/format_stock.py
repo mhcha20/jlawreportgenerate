@@ -13,6 +13,36 @@ def _txt(x):
 def _n(x): return len(_txt(x))
 
 
+def check_card(S, T):
+    """只出行動卡（build.py --card）用：行動卡各格＋九構面理由"""
+    err = []
+    def need(ok, msg):
+        if not ok: err.append(msg)
+    def length(key, lim, src=T, label=None):
+        need(_n(src.get(key)) >= lim, f'{label or key} 太短（{_n(src.get(key))} 字，要 ≥{lim}，照範本寫具體數字同理由）')
+    def rows(key, n_min, each=0, col=None):
+        rr = T.get(key) or []
+        need(len(rr) >= n_min, f'{key} 要 ≥{n_min} 項（而家 {len(rr)}）')
+        if each:
+            for i, r in enumerate(rr):
+                v = r[col] if (col is not None and isinstance(r, (list, tuple)) and len(r) > col) else r
+                need(_n(v) >= each, f'{key}[{i}] 太短（{_n(v)} 字，要 ≥{each}）：「{_txt(v)[:30]}」')
+
+    # 行動卡（範本每格都有具體數字）
+    length('sub', 35, S, "S['sub']（第 1 格評等補充）")
+    length('biggest', 150, label='biggest（第 4 格同上一份最大變化）')
+    length('cost_tail', 80, label='cost_tail（第 6 格尾句）')
+    length('corr', 40, label='corr（第 7 格今日更正）')
+    length('foot', 60, label='foot（卡底證據層級／下次財報）')
+    need('回踩區入場（主目標' in _txt(T.get('cost_tail')) or '回踩區入場（主目標' in _txt(T), '第 6 格要有固定句「回踩區入場（主目標 x.xxR）」')
+
+    # 九構面理由（範本每格一句連數字，約 40–70 字）
+    for d in S.get('dims') or []:
+        need(_n(d[2]) >= 30, f'九構面「{d[0]}」理由太短（{_n(d[2])} 字，要 ≥30，要有數字同升降原因）')
+
+    return err
+
+
 def check(S, T, pages):
     err = []
     def need(ok, msg):
@@ -31,17 +61,7 @@ def check(S, T, pages):
     need(pages.get('rep', 0) >= int(os.environ.get('STOCK_MIN_REPORT_PAGES', '9')), f'本體報告只有 {pages.get("rep")} 頁（範本 9 頁，要 ≥9、≤10）：各部分照範本寫足')
     need(pages.get('app', 0) >= int(os.environ.get('STOCK_MIN_APPENDIX_PAGES', '3')), f'核對附錄只有 {pages.get("app")} 頁（範本 4 頁，要 ≥3）：口徑、對照差異、更正清單、資料來源要寫足')
 
-    # 行動卡（範本每格都有具體數字）
-    length('sub', 35, S, "S['sub']（第 1 格評等補充）")
-    length('biggest', 150, label='biggest（第 4 格同上一份最大變化）')
-    length('cost_tail', 80, label='cost_tail（第 6 格尾句）')
-    length('corr', 40, label='corr（第 7 格今日更正）')
-    length('foot', 60, label='foot（卡底證據層級／下次財報）')
-    need('回踩區入場（主目標' in _txt(T.get('cost_tail')) or '回踩區入場（主目標' in _txt(T), '第 6 格要有固定句「回踩區入場（主目標 x.xxR）」')
-
-    # 九構面理由（範本每格一句連數字，約 40–70 字）
-    for d in S.get('dims') or []:
-        need(_n(d[2]) >= 30, f'九構面「{d[0]}」理由太短（{_n(d[2])} 字，要 ≥30，要有數字同升降原因）')
+    err += check_card(S, T)
 
     # 本體報告各部分
     length('oneliner', 120, label='oneliner（第一頁一句話結論）')

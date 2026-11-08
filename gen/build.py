@@ -103,6 +103,10 @@ if sig:
     if sig['alerts'] != 3: bad.append(f'第 5 格警報價解析到 {sig["alerts"]} 個（要 3 個）')
     if not sig['flat'] or not sig['held']: bad.append('第 2 格今日動作要寫「未持倉：…。已持倉：…。」')
     if bad: die('行動卡 signals.js 解析有問題：' + '；'.join(bad) + '\n解析結果：' + json.dumps(sig, ensure_ascii=False))
+if STRICT and CARD_ONLY:   # 只出行動卡：照樣擋行動卡各格篇幅（用戶 2026-11-08 加呢個模式）
+    import format_stock
+    errs = format_stock.check_card(S, T)
+    if errs: die('行動卡格式未跟足範本（' + str(len(errs)) + ' 項），逐項補返再提交：\n- ' + '\n- '.join(errs))
 if STRICT and not CARD_ONLY:
     import format_stock
     errs = format_stock.check(S, T, {k: res[jobs[i]['pdf']] for i, k in enumerate(['card', 'rep', 'app'][:len(jobs)])})

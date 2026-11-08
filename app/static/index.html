@@ -78,6 +78,10 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
 @media (prefers-color-scheme: dark) { .sgtag.opp { background:#16361f; color:#7fd99a; } .sgtag.risk { background:#3d1b1b; color:#f29b94; } .sgtag.mix { background:#3a2d10; color:#f0c36a; } }
 .cdrow { margin-top:10px; } .cdrow input[type=date] { display:block; width:100%; max-width:100%; min-width:0; box-sizing:border-box; -webkit-appearance:none; appearance:none; min-height:42px; }
 .cdbtns { display:flex; gap:8px; margin-top:8px; } .cdbtns button { flex:1; width:auto; white-space:nowrap; }
+.sparts { display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin:10px 0 4px; } .sparts .lbl { flex-basis:100%; font-weight:700; }
+.sparts label { flex:1 1 140px; display:flex; flex-direction:column; gap:2px; border:1px solid var(--line); border-radius:10px; padding:8px 10px 8px 34px; position:relative; cursor:pointer; }
+.sparts label input { position:absolute; left:10px; top:11px; width:18px; height:18px; margin:0; }
+.sparts label small { color:var(--mute); font-size:12px; } .sparts label:has(input:checked) { border:2px solid var(--pri); padding:7px 9px 7px 33px; }
 </style>
 </head>
 <body>
@@ -161,7 +165,7 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
     </div>
 
     <div class="card" id="cardS" hidden>
-      <h2>出個股報告（行動卡＋本體報告＋核對附錄）</h2>
+      <h2>出個股報告</h2>
       <div class="row">
         <div><label for="sdate">交易日（亞洲股收市後就揀得）</label><select id="sdate"></select></div>
         <div style="flex:0"><button class="sec" id="sreload">重新檢查</button></div>
@@ -185,11 +189,14 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       </div>
       <div class="srow"><button class="sec" id="sall">揀晒顯示中截圖齊嘅</button><button class="sec" id="snone">清除</button></div>
       <div class="slist" id="slist"></div>
+      <div class="sparts"><span class="lbl">出咩：</span>
+        <label><input type="radio" name="sparts" value="all" checked> 三份齊<small>行動卡＋本體報告＋核對附錄</small></label>
+        <label><input type="radio" name="sparts" value="card"> 只出行動卡<small>一頁，平好多、快好多</small></label></div>
       <label class="chk"><input type="checkbox" id="sup"> 完成後自動上載到報告中心（Drive）</label>
       <label class="chk">AI：<select id="seng"><option value="auto">自動（Claude，用唔到轉 Grok）</option><option value="gemini">Google Gemini</option><option value="grok">xAI Grok</option></select></label>
       <button class="big" id="sgo" disabled>出報告</button>
       <div class="msg" id="sgoMsg"></div>
-      <div class="mute" style="margin-top:6px">每隻約 15 分鐘、約 US$2–4；同時做 2 隻，其餘排隊。美股會承襲當日大盤報告，建議先出大盤。</div>
+      <div class="mute" style="margin-top:6px" id="scostNote">每隻約 15 分鐘、約 US$2–4；同時做 2 隻，其餘排隊。美股會承襲當日大盤報告，建議先出大盤。</div>
     </div>
 
     <details class="card" id="cardJ">
@@ -425,7 +432,7 @@ $('cdate').addEventListener('change', () => { cpRows = []; cpDate = ''; if ($('c
 $('cdUs').onclick = () => { if (cDef.us) { $('cdate').value = cDef.us; $('cdate').dispatchEvent(new Event('change')); } };
 $('cdAsia').onclick = () => { if (cDef.asia) { $('cdate').value = cDef.asia; $('cdate').dispatchEvent(new Event('change')); } };
 const MKTN = {hk: '香港', jp: '日本', kr: '韓國'};
-const kindName = j => j.kind === 'stock' ? esc(j.ticker) + ' 個股報告' : j.kind === 'amarket' ? (MKTN[j.ticker] || esc(j.ticker)) + '大盤報告' : '大盤報告';
+const kindName = j => j.kind === 'stock' ? esc(j.ticker) + (j.parts === 'card' ? ' 行動卡（只出卡）' : ' 個股報告') : j.kind === 'amarket' ? (MKTN[j.ticker] || esc(j.ticker)) + '大盤報告' : '大盤報告';
 const ST = {queued: ['排隊中', 'warn'], running: ['進行中', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad'], cancelled: ['已取消', '']};
 let canUpload = false, openLog = new Set();
 async function loadJobs() {
@@ -599,7 +606,8 @@ function drawStocks() {
     $('slist').querySelectorAll('.grp button').forEach(b => b.onclick = () => pickGroup(b.dataset.t));
   } else $('slist').innerHTML = list.map(box).join('');
   if (typeof wChips === 'function') wChips();
-  $('sgo').disabled = !picked.size; $('sgo').textContent = picked.size ? `出報告（${picked.size} 隻，約 US$${picked.size * 2}–${picked.size * 4}）` : '出報告';
+  const [lo, hi] = sCost(); $('sgo').disabled = !picked.size;
+  $('sgo').textContent = picked.size ? `出${sCard() ? '行動卡' : '報告'}（${picked.size} 隻，約 US$${picked.size * lo}–${picked.size * hi}）` : (sCard() ? '出行動卡' : '出報告');
 }
 function pickGroup(t) { shown().filter(x => (x.theme || '未分類') === t && x.status === 'ok').forEach(x => picked.add(x.ticker)); drawStocks(); }
 $('ssort').onchange = drawStocks;
@@ -675,6 +683,18 @@ $('wdel').onclick = async () => {
   if (!confirm(`刪除清單「${cur.name}」（${cur.tickers.length} 隻）？刪咗冇得復原。`)) return;
   if (await saveLists(wLists.filter((_, i) => i !== wCur), `已刪除「${cur.name}」`)) { wCur = 0; drawWatch(); }
 };
+// 出咩（用戶 2026-11-08）：三份齊／只出行動卡；記住上次揀咩
+const sCard = () => (document.querySelector('input[name=sparts]:checked') || {}).value === 'card';
+const sCost = () => sCard() ? [1, 2] : [2, 4];
+function sPartsNote() {
+  $('scostNote').textContent = sCard() ? '只出行動卡：每隻約 5–8 分鐘、約 US$1–2（Gemini 更平）；同時做 2 隻，其餘排隊。卡一樣會入買賣訊號／回測。美股會承襲當日大盤報告，建議先出大盤。'
+    : '每隻約 15 分鐘、約 US$2–4；同時做 2 隻，其餘排隊。美股會承襲當日大盤報告，建議先出大盤。';
+}
+try { if (localStorage.getItem('sparts') === 'card') { document.querySelector('input[name=sparts][value=card]').checked = true; sPartsNote(); } } catch (e) {}
+document.querySelectorAll('input[name=sparts]').forEach(r => r.onchange = () => {
+  try { localStorage.setItem('sparts', sCard() ? 'card' : 'all'); } catch (e) {}
+  sPartsNote(); drawStocks();
+});
 // 推介：/api/suggest 用上一張行動卡價位＋當日量價計分（唔用 AI）
 let sugg = [];
 function drawSugg() {
@@ -713,15 +733,16 @@ $('snone').onclick = () => { picked.clear(); drawStocks(); };
 $('sgo').onclick = async () => {
   const by = Object.fromEntries(stocks.map(x => [x.ticker, x]));
   const again = [...picked].filter(t => by[t] && by[t].done && by[t].done !== 'busy').sort(codeCmp);
-  if (again.length && !confirm(`以下 ${again.length} 隻 ${$('sdate').value} 已經出過報告：\n${again.map(t => t + '（' + (by[t].done === 'site' ? '本站已出' : 'Drive 已有') + '）').join('、')}\n\n再做會再收一次費（每隻約 US$2–8）。確定要重做？`)) return;
+  if (again.length && !confirm(`以下 ${again.length} 隻 ${$('sdate').value} 已經出過報告：\n${again.map(t => t + '（' + (by[t].done === 'site' ? '本站已出' : 'Drive 已有') + '）').join('、')}\n\n再做會再收一次費（每隻約 US$${sCost()[0]}–${sCost()[1] * 2}）。確定要重做？`)) return;
   try {   // 同市場當日大盤報告未上載 Drive → 先問（個股會用最近一份大盤報告）
     const mr = await api(`/api/market_ready?date=${$('sdate').value}&tickers=${encodeURIComponent([...picked].join(','))}`);
     if (mr.missing.length && !confirm(`Drive 未有 ${$('sdate').value} 當日嘅大盤報告：\n` + mr.missing.map(m => `・${m.market}（影響 ${m.tickers.length} 隻：${m.tickers.slice(0, 8).join('、')}${m.tickers.length > 8 ? '…' : ''}）\n　會改用：${m.latest || '冇（只用截圖指數）'}`).join('\n') + `\n\n建議先出當日大盤報告並「上載 Drive」再出個股。照出？`)) return;
   } catch (e) {}
-  if (picked.size > 5 && !confirm(`出 ${picked.size} 隻股票報告，估計 US$${picked.size * 2}–${picked.size * 4}、要 ${Math.ceil(picked.size / 2) * 15} 分鐘左右。確定？`)) return;
+  const [lo, hi] = sCost();
+  if (picked.size > 5 && !confirm(`出 ${picked.size} 隻股票${sCard() ? '行動卡' : '報告'}，估計 US$${picked.size * lo}–${picked.size * hi}、要 ${Math.ceil(picked.size / 2) * (sCard() ? 6 : 15)} 分鐘左右。確定？`)) return;
   $('sgo').disabled = true; $('sgoMsg').textContent = '';
   try {
-    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({kind: 'stock', date: $('sdate').value, tickers: [...picked], upload: $('sup').checked, engine: $('seng').value})});
+    const r = await api('/api/generate', {method: 'POST', body: JSON.stringify({kind: 'stock', date: $('sdate').value, tickers: [...picked], upload: $('sup').checked, engine: $('seng').value, parts: sCard() ? 'card' : 'all'})});
     $('sgoMsg').innerHTML = `<span class="ok">已加入 ${r.created} 隻（其餘已經做緊），下面睇進度</span>`; picked.clear(); drawStocks(); loadJobs();
   } catch (e) { $('sgoMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; $('sgo').disabled = false; }
 };

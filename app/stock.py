@@ -9,6 +9,52 @@ from agent import GEN, _read, img_block
 FORMAT_REF_STOCK = os.environ.get('FORMAT_REF_STOCK', '2026-10-30_ESTC_')   # 個股格式範本（用戶 2026-11-05 指定）：Drive 檔名前綴，攞行動卡／股票分析終極報告／核對附錄三份
 
 
+CARD_FMT = """- 行動卡：S['sub'] ≥35 字；biggest ≥150；cost_tail ≥80，要有「回踩區入場（主目標 x.xxR）」；corr ≥40；foot ≥60。九構面每格理由 ≥30 字。"""
+
+
+def card_system(ref):
+    """只出一頁行動卡（用戶 2026-11-08 要求可以揀）：唔使本體報告／附錄、朗讀稿，提示詞細好多，用量少好多"""
+    return f"""你係 JLaw 報告中心嘅個股分析員，今次**只出一頁 V2.0 行動卡**（唔出本體報告同核對附錄），做法照 WORKER_CARD.md，只係經 API 做：
+你會收到當日截圖（圖像）、由行情重算嘅數字、上一份報告、當日大盤報告。你要逐張睇圖、用 web_search 核實下次財報日、近期新聞／催化劑（附來源同日期），然後寫一個 work 檔（Python，結構＝template_card.py：spec 填足、texts 只要 biggest／cost_tail／corr／foot 四欄，另加 qa(m, S, T)），用 build_report 工具提交（網站會自動用 --card 模式）。
+build 會擋：work 檔冇 TODO、今日動作 ≤40 字、行動卡 1 頁、qa() ≥20 項重算全過、評等同分數對應、價位次序、行動卡經 signals.js 解析（日期、評等、分數、三條價位、3 個警報、未持倉／已持倉）、行動卡格式擋位。失敗就照錯誤改好再提交。
+
+規則重點（同三份齊出一樣）：
+- 用廣東話（繁體）。數字一律用 f-string 由 m／S 取值；寫死嘅數字要喺 qa(m, S, T) 用 `from sqa import chk, chk_true` 重算登記（≥20 項）。
+- work 檔只可以 import lib／gen（`from lib import *`）、sqa 同 Python 標準庫；唔好讀寫檔案、上網、subprocess。
+- 圖面讀數睇唔清就寫「無法辨識」，唔好估；查唔到嘅寫「未公布」「缺項」，唔好編造。
+- 評等要同分數對應（每 20 分一級）：★ 避免交易 <30｜★★ 不建議 30–49｜★★★ 觀察 50–69｜★★★★ 值得買入 70–89｜★★★★★ 強烈買入 ≥90（分數＝九構面星數÷45×100），rating 寫「★★★ 觀察」咁、stars 同星數一致。
+- 第 6 格要有固定句「回踩區入場（主目標 x.xxR）」。唔好提「群組」「執行規則」。
+- 評分、價位、形態判斷要參考 J Law 方法筆記。
+- **承襲價位規則**：未失效照用上一份數字；已失效（以收市價計）就重訂有理據嘅新位，foot 或 biggest 寫「舊 X（日期失效）→ 新 Y（理據）」。跌穿當日今日動作照舊價計（離場線跌穿＝今日離場、減倉線跌穿＝減倉），新價下一交易日起生效。
+- **價位次序**（build 會擋）：回踩區下限 ≥ 減倉線 ≥ 離場線 ≥ 回踩止損；未失效承襲價本身唔夾就照用，喺 S['level_note'] 寫明（≥20 字）。
+- S['ai_line'] 寫「AI：<模型識別碼>，直接閱讀截圖圖像。」
+
+=== 行動卡格式擋位最低要求（第一次交就要達到）===
+{CARD_FMT}
+
+=== WORKER_CARD.md（只出行動卡流程；drive.py／prep.py／build.py／上載網站已經代你做；Longbridge 核實結果喺 user 訊息）===
+{_read('docs/WORKER_CARD.md')}
+
+=== JLaw × MYT 股票分析終極指令 V2.0 ===
+{_read('docs/jlaw-myt-stock-prompt-v2.md')}
+
+=== J Law 技術分析／交易方法筆記（MYT 文件整理）===
+{_read('docs/jlaw-method-notes.md')}
+
+=== gen/lib.py（m＝metrics(t)，可用函數）===
+{_read('gen/lib.py')}
+
+=== gen/gen.py（plan_numbers、行動卡版面）===
+{_read('gen/gen.py')}
+
+=== gen/sqa.py（qa() 用嘅 chk／chk_true）===
+{_read('gen/sqa.py')}
+
+=== gen/template_card.py（work 檔範本：所有 TODO／0 都要換成當日內容；另加 qa(m, S, T)）===
+{_read('gen/template_card.py')}
+{ref}"""
+
+
 def stock_system(ref):
     return f"""你係 JLaw 報告中心嘅個股分析員，任務係出一隻股票嘅 V2.0 報告（三份 PDF：一頁行動卡、本體報告 9–10 頁、核對附錄），做法同 Claude Code 排程 session 完全一樣（WORKER.md），只係今次經 API 做：
 你會收到當日截圖（圖像）、由行情重算嘅數字、上一份報告、當日大盤報告。你要逐張睇圖、用 web_search 核實下次財報日、近期新聞／催化劑、分析員評級（附來源同日期），然後寫一個完整嘅 work 檔（Python），用 build_report 工具提交。
@@ -82,8 +128,8 @@ def metrics_summary(t, date):
 
 
 class StockJob(agent.Job):
-    def __init__(s, jid, date, ticker, folder, log):
-        super().__init__(jid, date, folder, log); s.ticker = ticker
+    def __init__(s, jid, date, ticker, folder, log, card_only=False):
+        super().__init__(jid, date, folder, log); s.ticker = ticker; s.card_only = card_only
 
     def run(s):
         t, date = s.ticker, s.date
@@ -129,14 +175,15 @@ class StockJob(agent.Job):
         ref = ''
         if FORMAT_REF_STOCK:
             try:
-                parts = [jlaw.report_by_name(FORMAT_REF_STOCK + k) for k in ('行動卡', '股票分析終極報告', '核對附錄')]
-                ref = ('\n\n=== 格式範本（硬性跟足）===\n用戶要求每份個股報告嘅格式、每一格嘅寫法同篇幅都要同下面 ESTC 範本一樣（數字當然用當日嘅）：'
+                parts = [jlaw.report_by_name(FORMAT_REF_STOCK + k) for k in (('行動卡',) if s.card_only else ('行動卡', '股票分析終極報告', '核對附錄'))]
+                ref = ('\n\n=== 格式範本（行動卡，硬性跟足）===\n每一格嘅寫法同篇幅都要同下面 ESTC 行動卡一樣（數字用當日嘅）。' + ''.join(f'\n--- {n} ---\n{x[:40000]}' for n, x in parts if n)) if s.card_only else ('\n\n=== 格式範本（硬性跟足）===\n用戶要求每份個股報告嘅格式、每一格嘅寫法同篇幅都要同下面 ESTC 範本一樣（數字當然用當日嘅）：'
                        '行動卡七格每格都有具體數字同理由；本體報告每部分（大市三問、生命週期、趨勢表、VPA 六行、形態、S/R 五行、Pullback／Breakout 各三點、'
                        '機構、基本面八行、風險五類、交易計劃、三個強制欄位、九構面逐格理由、保留／不升級原因、與上一份逐項比較、最後四問、未決問題）都要寫到範本咁詳細；'
                        '核對附錄寫足口徑、對照差異、更正清單、資料來源。build 有格式擋位（format_stock.py），任何一格少過範本水平都會失敗，要補返先過。'
                        + ''.join(f'\n--- {n} ---\n{x[:40000]}' for n, x in parts if n))
                 s.log('格式範本：' + ('、'.join(n for n, _ in parts if n) or '⚠ 搵唔到 ' + FORMAT_REF_STOCK))
             except Exception as e: s.log(f'⚠ 讀唔到格式範本：{e}')
+        if s.card_only: s.log('今次只出一頁行動卡')
         hk = dt.datetime.now(ZoneInfo('Asia/Hong_Kong'))
         content = []
         for f in sh['files']:
@@ -157,8 +204,8 @@ Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三�
 當日大盤報告（市場配合構面、R4 第一項、mkt_state／mkt_ref）：{mname or '（冇' + ('，亞洲股只用圖面指數' if sh['kind'] == 'ASIA' else '') + '）'}{'（唔係當日，承襲最近一份，要喺 foot 註明）' if mname and not same else ''}
 {mtxt[:30000]}
 
-請：①逐張睇晒截圖抄讀數；②下次財報日：上面 Longbridge 有就用佢（註明來源 Longbridge 財經日曆，以公司公告為準），冇先用 web_search 核實；用 web_search 核實近期新聞／催化劑、分析員評級（附來源同日期）；③九構面逐格評分寫理由、A／B 路徑價位、減倉／離場、今日動作；④寫完整 work 檔（spec／texts／qa），用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結（評等、分數、今日動作）收尾。"""})
-        return s.analyze(stock_system(ref), content)
+請：①逐張睇晒截圖抄讀數；②下次財報日：上面 Longbridge 有就用佢（註明來源 Longbridge 財經日曆，以公司公告為準），冇先用 web_search 核實；用 web_search 核實近期新聞／催化劑、分析員評級（附來源同日期）；③九構面逐格評分寫理由、A／B 路徑價位、減倉／離場、今日動作；④寫完整 work 檔（spec／texts／qa{'；今次只出行動卡：照 template_card.py，texts 只要 biggest／cost_tail／corr／foot' if s.card_only else ''}），用 build_report 提交，失敗就改好再提交。成功後檢查縮圖版面，冇問題就用一兩句總結（評等、分數、今日動作）收尾。"""})
+        return s.analyze(card_system(ref) if s.card_only else stock_system(ref), content)
 
     def lb_verify(s, t, date, lbs, lbmsg, lb_filled):
         """Longbridge 收市核實＋下次業績日 → 俾 AI 嘅一段文字（失敗唔會令報告失敗）"""
@@ -184,7 +231,7 @@ Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三�
         return (GEN, f"import sys, os; sys.path.insert(0, {GEN!r}); os.chdir({GEN!r}); os.environ['JL_DATE'] = {s.date!r}\nfrom lib import *\nfrom gen import *\nm = metrics({s.ticker!r})")
 
     def build_cmd(s, wp):
-        return ([sys.executable, os.path.join(GEN, 'build.py'), s.ticker, s.date, wp, '--out', s.dir],
+        return ([sys.executable, os.path.join(GEN, 'build.py'), s.ticker, s.date, wp, '--out', s.dir] + (['--card'] if s.card_only else []),
                 {'STOCK_STRICT': os.environ.get('STOCK_STRICT', '1'), 'JL_DATE': s.date})
 
     def on_success(s, info):
