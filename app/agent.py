@@ -345,6 +345,10 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
             head = ('要改嘅位（逐項改晒先再提交，唔好只改一項）：\n' + '\n'.join(key) + '\n\n') if key else ''
             return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 失敗：\n' + head + '完整輸出（尾段）：\n' + out[-5000:]}
         info = json.loads([l for l in p.stdout.splitlines() if l.startswith('{')][-1])
+        err = s.post_build_check(info)   # 個股：上一張卡價位被跌穿要照處理（StockJob）
+        if err:
+            s.log('build 未過：✗ ' + err[:300])
+            return {'type': 'tool_result', 'tool_use_id': b.id, 'is_error': True, 'content': 'build 失敗：\n✗ ' + err}
         s.on_success(info)
         res = [{'type': 'text', 'text': 'build 成功：' + json.dumps(info, ensure_ascii=False) + '\n以下係每頁縮圖，檢查版面（溢出、空白、表格斷開）。冇問題就收尾；要改就再提交完整 work 檔。'}]
         for pdf in s.pdfs:
@@ -379,6 +383,8 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         return ([sys.executable, os.path.join(GEN, 'market', 'build.py'), s.date, wp, '--out', s.dir],
                 {'MARKET_SUFFIX': {'grok': 'Grok核實版', 'gemini': 'Gemini核實版'}.get(s.engine, 'Claude核實版'),
                  'FORMAT_STRICT': os.environ.get('FORMAT_STRICT', '1'), 'JLAW_REQUIRED': '1' if s.jlaw_required else '0'})
+
+    def post_build_check(s, info): return None
 
     def on_success(s, info):
         s.pdf, s.pages = info['pdf'], info['pages']; s.pdfs = [s.pdf]
