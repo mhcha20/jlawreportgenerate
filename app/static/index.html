@@ -82,6 +82,8 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
 .sparts label { flex:1 1 140px; display:flex; flex-direction:column; gap:2px; border:1px solid var(--line); border-radius:10px; padding:8px 10px 8px 34px; position:relative; cursor:pointer; }
 .sparts label input { position:absolute; left:10px; top:11px; width:18px; height:18px; margin:0; }
 .sparts label small { color:var(--mute); font-size:12px; } .sparts label:has(input:checked) { border:2px solid var(--pri); padding:7px 9px 7px 33px; }
+.mstate { margin-top:6px; padding:6px 10px; border-radius:8px; font-size:14px; border:1px solid var(--line); }
+.mstate.busy { border-color:var(--warn); } .mstate.idle { color:var(--ink); }
 </style>
 </head>
 <body>
@@ -355,6 +357,22 @@ function cDesc(t) {
   if (p.date) bits.push(p.date);
   return esc(t.label) + (bits.length ? '：' + esc(bits.join('｜')) : '');
 }
+// Mac 而家做緊咩（用戶 2026-11-10 要求顯示閒置／忙碌）：busy＝Mac 回報嘅 pgrep 結果或者「做緊 <動作>」
+const BUSY_NAMES = [['run-daily.sh', '朝早自動排程（美股大盤＋個股截圖）'], ['run-asia.sh', '亞洲自動排程（港日韓截圖）'],
+  ['capture_stock_screenshots.py', '截緊個股（富途）'], ['capture_market_charts.py', '截緊大盤圖（TradingView）'], ['check_drive.py', '檢查緊 Drive／補截']];
+function macState(m, tasks) {
+  const run = tasks.find(t => t.status === 'running'), nq = tasks.filter(t => t.status === 'queued').length;
+  const q = nq ? `；仲有 ${nq} 個動作排緊隊` : '';
+  if (run) {
+    const since = run.started ? '，' + esc(run.started.slice(11, 16)) + ' 開始' : '';
+    return `<div class="mstate busy">🔵 <b>忙碌</b>：做緊網頁排嘅動作「${cDesc(run)}」${since}${q}</div>`;
+  }
+  if (m.busy) {
+    const hit = BUSY_NAMES.find(([k]) => m.busy.includes(k));
+    return `<div class="mstate busy">🟠 <b>忙碌</b>：${esc(hit ? hit[1] : m.busy)}，做完先會接網頁嘅動作${q}</div>`;
+  }
+  return `<div class="mstate idle">⚪ <b>閒置</b>：冇嘢做緊，撳掣即刻開始（最多 30 秒內）${q}</div>`;
+}
 async function loadCapture(setDate) {
   clearTimeout(cTimer);
   let v; try { v = await api('/api/capture'); } catch (e) { $('cMac').innerHTML = `<span class="bad">讀唔到：${esc(e.message)}</span>`; return; }
@@ -364,7 +382,7 @@ async function loadCapture(setDate) {
   if (setDate && !$('cdate').value) $('cdate').value = cDef.us || '';
   const m = v.mac || {};
   $('cMac').innerHTML = !v.token_set ? '<span class="warn">網站未設定 CAPTURE_TOKEN：Mac 要先行 bash mac/remote-setup.sh，再將 token 加入 Railway</span>'
-    : m.online ? `<span class="ok cdot">🟢 Mac 在線</span> <span class="mute">${esc(m.host || '')} · ${m.age} 秒前聯絡 · 程式 ${esc(m.version || '?')}${m.busy ? ' · 忙：' + esc(m.busy) : ''}</span>`
+    : m.online ? `<span class="ok cdot">🟢 Mac 在線</span> <span class="mute">${esc(m.host || '')} · ${m.age} 秒前聯絡 · 程式 ${esc(m.version || '?')}</span>${macState(m, v.tasks)}`
     : `<span class="bad cdot">🔴 Mac 離線</span> <span class="mute">${m.at ? '最後聯絡 ' + esc(m.at.replace('T', ' ').slice(0, 16)) : '從未聯絡過'}（排咗嘅動作會等 Mac 返嚟先做）</span>`;
   const ts = v.tasks.slice(0, 15);
   $('cList').innerHTML = ts.length ? ts.map(t => {
