@@ -181,6 +181,10 @@ class H(BaseHTTPRequestHandler):
         if e: return e
         given = s.headers.get('x-password', '')
         if auth.password_on() and PW and hmac.compare_digest(given.encode(), PW.encode()): return '密碼'
+        # 報告中心（jlaw-report）伺服器代讀寫自訂股票清單（用戶 2026-11-12：兩個網站用同一批清單）：只限 /api/watchlist，
+        # header x-jlaw-admin＝JLAW_ADMIN_PASSWORD（即係報告中心嘅 ADMIN_PASSWORD）
+        ja = os.environ.get('JLAW_ADMIN_PASSWORD', '')
+        if urlparse(s.path).path == '/api/watchlist' and len(ja) >= 8 and hmac.compare_digest(s.headers.get('x-jlaw-admin', '').encode(), ja.encode()): return '報告中心'
         return None
 
     def _authed(s): return bool(s._user())
