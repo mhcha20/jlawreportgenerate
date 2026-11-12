@@ -89,7 +89,8 @@ jlawreportgenerate（本 repo，Railway）── app/server.py：網頁＋API＋
 | GET `/api/dates` | 大盤日期＋個股日期（`stock_dates`＝大盤日期＋最近 10 個工作日） |
 | GET `/api/shots?date=` | 大盤 19 張截圖狀態 |
 | GET `/api/stocks?date=` | 個股清單（狀態、版面、行業 theme、名） |
-| GET／POST `/api/watchlist` | 每日清單（`DATA_DIR/watchlist.json`） |
+| GET／POST `/api/watchlist` | 自訂股票清單 `{lists:[{name,tickers}]}`（`DATA_DIR/watchlist.json`）；報告中心伺服器用 header `x-jlaw-admin`＝`JLAW_ADMIN_PASSWORD` 代讀寫（只限呢條 API） |
+| GET `/api/stock_lookup?q=` | 加截圖股票前核對：Yahoo 正式名／交易所／ETF／現價＋現有清單（`app/stocklist.py`）；確認後經 `/api/capture` 排 `add_stock`／`remove_stock` |
 | POST `/api/auth` | 試密碼 |
 
 ## 5. 排程
