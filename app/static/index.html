@@ -88,6 +88,8 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
 .smgr .hd { display:flex; gap:6px; align-items:baseline; } .smgr .hd .st { margin-left:auto; font-size:13px; }
 .smgr input.smgWord { margin-top:4px; }
 #smg summary { list-style:none; } #smg[open] summary { margin-bottom:6px; }
+.smgbtn { display:inline-block; margin-top:10px; padding:8px 14px; border:1px solid var(--pri); border-radius:8px; color:var(--pri); font-weight:600; cursor:pointer; }
+#smg[open] .smgbtn { background:var(--pri); color:#fff; }
 </style>
 </head>
 <body>
@@ -158,15 +160,7 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       <div class="row" style="margin-top:6px"><div><input id="ctk" placeholder="揀咗嘅股票會喺度出現（亦可以自己打，空格分開）"></div></div>
       <label class="chk"><input type="checkbox" id="ctkDate"> 用上面日期（唔剔＝每隻股票自己最近一個交易日）</label>
       <div class="cbtns"><button data-act="stocks">截呢幾隻股票</button></div>
-      <h3 class="ch">截大盤</h3>
-      <div class="cbtns"><button class="sec" data-act="us_market">截美股大盤 19 張</button></div>
-      <div class="cbtns"><label class="chk"><input type="checkbox" class="cmk" value="hk" checked> 香港</label><label class="chk"><input type="checkbox" class="cmk" value="jp" checked> 日本</label><label class="chk"><input type="checkbox" class="cmk" value="kr" checked> 韓國</label>
-        <button class="sec" data-act="asia_market">截亞洲大盤</button></div>
-      <h3 class="ch">重跑排程／維修</h3>
-      <div class="cbtns"><button class="sec" data-act="rerun_morning">重跑朝早美股排程</button><button class="sec" data-act="rerun_asia">重跑 17:15 亞洲排程</button>
-        <button class="sec" data-act="fix_display">修正螢幕解像度</button><button class="sec" data-act="update">更新 Mac 程式</button></div>
-      <div class="msg" id="cMsg"></div>
-      <details id="smg"><summary class="ch" style="cursor:pointer">➕ 加／移除截圖股票</summary>
+      <details id="smg"><summary class="smgbtn">➕ 加／移除截圖股票</summary>
         <div class="mute">美股、美國 ETF、港股、日股、韓股。打代號（港股 700 或 0700.HK、日股 7974、韓股 000660），先查 Yahoo 核對公司名，你確認先加。</div>
         <div class="srow"><input id="smgQ" placeholder="例如：ANF NKE 700 7974 000660"><button class="sec" id="smgLook" style="flex:0;white-space:nowrap">查詢</button></div>
         <div id="smgRows"></div>
@@ -175,6 +169,14 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
         <div class="srow"><input id="smgRm" placeholder="要移除嘅代號，例如：ABC 00077"><button class="sec" id="smgRmGo" style="flex:0;white-space:nowrap">移除</button></div>
         <div class="msg" id="smgMsg"></div>
       </details>
+      <h3 class="ch">截大盤</h3>
+      <div class="cbtns"><button class="sec" data-act="us_market">截美股大盤 19 張</button></div>
+      <div class="cbtns"><label class="chk"><input type="checkbox" class="cmk" value="hk" checked> 香港</label><label class="chk"><input type="checkbox" class="cmk" value="jp" checked> 日本</label><label class="chk"><input type="checkbox" class="cmk" value="kr" checked> 韓國</label>
+        <button class="sec" data-act="asia_market">截亞洲大盤</button></div>
+      <h3 class="ch">重跑排程／維修</h3>
+      <div class="cbtns"><button class="sec" data-act="rerun_morning">重跑朝早美股排程</button><button class="sec" data-act="rerun_asia">重跑 17:15 亞洲排程</button>
+        <button class="sec" data-act="fix_display">修正螢幕解像度</button><button class="sec" data-act="update">更新 Mac 程式</button></div>
+      <div class="msg" id="cMsg"></div>
       <h3 class="ch">最近動作</h3>
       <div id="cList"><div class="mute">載入中…</div></div>
     </div>
