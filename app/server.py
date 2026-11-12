@@ -309,6 +309,12 @@ class H(BaseHTTPRequestHandler):
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/watchlist': wl = watchlists(); return s._send(200, {'lists': wl, 'tickers': wl[0]['tickers']})
+        if p == '/api/stock_lookup':   # 加股票前核對：Yahoo 正式名／交易所／ETF＋現有清單（用戶 2026-11-12）
+            import stocklist
+            try: have = {r['ticker'] for r in jlaw.get_json('/api/shots')['stocks']['rows']}
+            except Exception: have = set()
+            try: return s._send(200, {'rows': stocklist.lookup(q.get('q', [''])[0], have), 'total': len(have)})
+            except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/capture':   # 網頁遙控 Mac 截圖：狀態＋最近動作＋預設日期
             import capture
             v = capture.view(DATA)

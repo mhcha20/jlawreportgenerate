@@ -84,6 +84,10 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
 .sparts label small { color:var(--mute); font-size:12px; } .sparts label:has(input:checked) { border:2px solid var(--pri); padding:7px 9px 7px 33px; }
 .mstate { margin-top:6px; padding:6px 10px; border-radius:8px; font-size:14px; border:1px solid var(--line); }
 .mstate.busy { border-color:var(--warn); } .mstate.idle { color:var(--ink); }
+.smgr { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-top:8px; }
+.smgr .hd { display:flex; gap:6px; align-items:baseline; } .smgr .hd .st { margin-left:auto; font-size:13px; }
+.smgr input.smgWord { margin-top:4px; }
+#smg summary { list-style:none; } #smg[open] summary { margin-bottom:6px; }
 </style>
 </head>
 <body>
@@ -162,6 +166,15 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
       <div class="cbtns"><button class="sec" data-act="rerun_morning">重跑朝早美股排程</button><button class="sec" data-act="rerun_asia">重跑 17:15 亞洲排程</button>
         <button class="sec" data-act="fix_display">修正螢幕解像度</button><button class="sec" data-act="update">更新 Mac 程式</button></div>
       <div class="msg" id="cMsg"></div>
+      <details id="smg"><summary class="ch" style="cursor:pointer">➕ 加／移除截圖股票</summary>
+        <div class="mute">美股、美國 ETF、港股、日股、韓股。打代號（港股 700 或 0700.HK、日股 7974、韓股 000660），先查 Yahoo 核對公司名，你確認先加。</div>
+        <div class="srow"><input id="smgQ" placeholder="例如：ANF NKE 700 7974 000660"><button class="sec" id="smgLook" style="flex:0;white-space:nowrap">查詢</button></div>
+        <div id="smgRows"></div>
+        <div class="cbtns"><button id="smgAdd" hidden>確認加入</button></div>
+        <div class="mute" style="margin-top:10px">移除＝以後唔再截，Drive 舊圖會搬去「停止截圖」資料夾保留，唔會刪；之後再加返會搬返出嚟。</div>
+        <div class="srow"><input id="smgRm" placeholder="要移除嘅代號，例如：ABC 00077"><button class="sec" id="smgRmGo" style="flex:0;white-space:nowrap">移除</button></div>
+        <div class="msg" id="smgMsg"></div>
+      </details>
       <h3 class="ch">最近動作</h3>
       <div id="cList"><div class="mute">載入中…</div></div>
     </div>
@@ -353,6 +366,7 @@ function cParams(act) {
 function cDesc(t) {
   const p = t.params || {}, bits = [];
   if (p.tickers) bits.push(p.tickers.join(' '));
+  if (p.items) bits.push(p.items.map(i => i.ticker + (i.names ? '（' + i.names[0] + '）' : '')).join(' '));
   if (p.markets) bits.push(p.markets.map(m => MKTN[m] || m).join('／'));
   if (p.date) bits.push(p.date);
   return esc(t.label) + (bits.length ? '：' + esc(bits.join('｜')) : '');
@@ -411,6 +425,57 @@ document.querySelectorAll('#cardC [data-act]').forEach(b => b.onclick = async ()
   } catch (e) { $('cMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
   b.disabled = false; loadCapture();
 });
+// 加／移除截圖股票（用戶 2026-11-12）：先查 Yahoo 核對公司名（用戶 2026-11-11 規定要確認先加），再排 add_stock 俾 Mac
+let smgList = [];
+const SMG_ST = {new: ['可以加', 'ok'], exists: ['已經有', 'mute'], unsupported: ['唔支援', 'warn'], notfound: ['查唔到', 'bad']};
+function smgDraw() {
+  const dup = {}; smgList.forEach(r => { dup[r.input] = (dup[r.input] || 0) + (r.status === 'new' ? 1 : 0); });
+  $('smgRows').innerHTML = smgList.length ? smgList.map((r, i) => {
+    const [st, c] = SMG_ST[r.status] || [r.status, ''];
+    const info = r.name ? `${esc(r.name)}<br><span class="mute">${esc(r.market_name || '')} · ${esc(r.exchange || r.exch || '')}${r.tv ? ' · ' + esc(r.tv) : ''}${r.etf ? ' · ETF' : ''} · 現價 ${esc(String(r.price))} ${esc(r.ccy || '')}</span>` : '';
+    const pick = r.status === 'new' ? `<label class="chk"><input type="checkbox" class="smgPick" data-i="${i}" ${dup[r.input] === 1 ? 'checked' : ''}> 加</label>
+      <div class="mute" style="margin-top:4px">富途核對字眼（英文公司名，開錯公司會停）：<input class="smgWord" data-i="${i}" value="${esc(r.check || '')}" maxlength="40"></div>` : '';
+    return `<div class="smgr"><div class="hd"><b>${esc(r.ticker)}</b>${r.input.toUpperCase() !== r.ticker ? ` <span class="mute">（你打 ${esc(r.input)}）</span>` : ''}<span class="st ${c}">${st}</span></div>
+      <div>${info}</div>${r.note ? `<div class="${r.status === 'new' ? 'warn' : 'mute'}">${esc(r.note)}</div>` : ''}${dup[r.input] > 1 && r.status === 'new' ? '<div class="warn">呢個代號有兩個市場都有，揀返你要嗰個</div>' : ''}${pick}</div>`;
+  }).join('') : '';
+  const n = document.querySelectorAll('.smgPick:checked').length;
+  $('smgAdd').hidden = !smgList.some(r => r.status === 'new'); $('smgAdd').disabled = !n;
+  $('smgAdd').textContent = n ? `確認加入（${n} 隻）` : '確認加入';
+  document.querySelectorAll('.smgPick').forEach(b => b.onchange = () => { const k = document.querySelectorAll('.smgPick:checked').length; $('smgAdd').disabled = !k; $('smgAdd').textContent = k ? `確認加入（${k} 隻）` : '確認加入'; });
+}
+$('smgLook').onclick = async () => {
+  const q = $('smgQ').value.trim(); if (!q) return;
+  $('smgLook').disabled = true; $('smgMsg').textContent = '查緊 Yahoo…'; smgList = []; smgDraw();
+  try { smgList = (await api('/api/stock_lookup?q=' + encodeURIComponent(q))).rows; $('smgMsg').textContent = ''; }
+  catch (e) { $('smgMsg').innerHTML = `<span class="bad">查唔到：${esc(e.message)}</span>`; }
+  $('smgLook').disabled = false; smgDraw();
+};
+$('smgQ').onkeydown = e => { if (e.key === 'Enter') $('smgLook').click(); };
+$('smgAdd').onclick = async () => {
+  const items = [...document.querySelectorAll('.smgPick:checked')].map(b => {
+    const r = smgList[+b.dataset.i], w = document.querySelector(`.smgWord[data-i="${b.dataset.i}"]`).value.trim();
+    return {ticker: r.ticker, market: r.market, names: [w], exchange: r.exchange, tv: r.tv, etf: r.etf, _name: r.name};
+  });
+  const empty = items.filter(it => !it.names[0]);
+  if (empty.length) { alert('以下未填富途核對字眼：' + empty.map(i => i.ticker).join('、')); return; }
+  if (!confirm('加入截圖清單：\n' + items.map(i => `・${i.ticker}　${i._name}（核對字眼：${i.names[0]}）`).join('\n') + '\n\n公司名啱晒先撳確定。加咗之後每日排程會截，美股每隻約多 2–3 分鐘。')) return;
+  $('smgAdd').disabled = true;
+  try {
+    const r = await api('/api/capture', {method: 'POST', body: JSON.stringify({action: 'add_stock', params: {items: items.map(({_name, ...x}) => x)}})});
+    $('smgMsg').innerHTML = r.created ? `<span class="ok">已排隊：Mac 30 秒內會開 Drive 資料夾同記低設定。做完可以喺上面「截股票」打 ${esc(items.map(i => i.ticker).join(' '))} 試截。</span>` : '<span class="warn">一樣嘅動作已經排緊</span>';
+    smgList = []; smgDraw(); $('smgQ').value = '';
+  } catch (e) { $('smgMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; $('smgAdd').disabled = false; }
+  loadCapture();
+};
+$('smgRmGo').onclick = async () => {
+  const ts = $('smgRm').value.toUpperCase().split(/[\s,，、]+/).filter(Boolean); if (!ts.length) return;
+  if (!confirm(`移除 ${ts.join('、')}？\n以後唔再截圖；Drive 舊圖搬去「停止截圖」資料夾保留，唔會刪，之後可以再加返。`)) return;
+  try {
+    const r = await api('/api/capture', {method: 'POST', body: JSON.stringify({action: 'remove_stock', params: {tickers: ts}})});
+    $('smgMsg').innerHTML = r.created ? '<span class="ok">已排隊，Mac 30 秒內會處理</span>' : '<span class="warn">一樣嘅動作已經排緊</span>'; $('smgRm').value = '';
+  } catch (e) { $('smgMsg').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  loadCapture();
+};
 // 揀股票（唔使自己打）：每日清單／截圖未齊／由清單逐隻撳
 let cpRows = [], cpDate = '';
 const cpSet = () => new Set($('ctk').value.toUpperCase().split(/[\s,，、]+/).filter(Boolean));

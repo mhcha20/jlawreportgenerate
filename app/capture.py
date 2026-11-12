@@ -23,6 +23,8 @@ ACTIONS = {
     'rerun_asia':    dict(label='重跑 17:15 亞洲排程', need=[], futu=True),
     'fix_display':   dict(label='修正螢幕解像度', need=[]),
     'update':        dict(label='更新 Mac 程式', need=[]),
+    'add_stock':     dict(label='加股票入截圖清單', need=['items']),      # 用戶 2026-11-12：網站加／移除股票
+    'remove_stock':  dict(label='移除股票（停止截圖）', need=['tickers']),
 }
 
 
@@ -65,6 +67,10 @@ def clean(action, params):
             if bad: raise ValueError(f'代號唔啱：{"、".join(bad)}')
             if not v: raise ValueError('至少一隻股票')
             if len(v) > 40: raise ValueError('一次最多 40 隻')
+        elif k == 'items':
+            import stocklist
+            if not isinstance(v, list) or not 1 <= len(v) <= 20: raise ValueError('一次加 1–20 隻')
+            v = [stocklist.validate_item(it) for it in v]
         elif k == 'markets':
             v = [m for m in (v if isinstance(v, list) else str(v).split(',')) if m in ('hk', 'jp', 'kr')]
             if not v: raise ValueError('揀最少一個市場')
