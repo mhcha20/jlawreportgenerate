@@ -17,23 +17,44 @@ def trend_rows(m):
         rows.append((f'SMA{k}', f'[計算] {m[f"ma{k}"]:.2f}（5 日前 {m[f"ma{k}_5"]:.2f}，{sg(dd)}）；現價 {sg(m[f"d{k}"])}', f'{dw}；{role}'))
     return rows
 
+def _tw(t, fs):   # 估文字闊度（中文≈1 字高，數字／英文≈0.58）
+    return sum(fs if ord(ch) > 0x2e80 else fs * .58 for ch in t)
+
+
 def strip_svg(m, S):
+    """價位尺：價位貼近時標籤會疊（用戶 2026-11-18：XLV MA50 175.74／減倉 176.22 疊埋），所以逐個標籤搵唔撞嘅一行，唔夠就向外加行。"""
     c = m['close']; A, B = S['A'], S['B']
     pts = [S['exitp'], S['reduce'], B['zone'][0], B['zone'][1], A['trig'], c, m['ma50'], m['ma20']]
-    lo, hi = min(pts), max(pts); sp = hi - lo; lo -= sp * .08; hi += sp * .08
+    lo, hi = min(pts), max(pts); sp = (hi - lo) or 1; lo -= sp * .08; hi += sp * .08
     W = 700; X = lambda p: 20 + (p - lo) / (hi - lo) * (W - 40)
-    s = [f'<svg viewBox="0 0 {W} 84" width="100%" xmlns="http://www.w3.org/2000/svg">']
-    s.append(f'<line x1="20" x2="{W-20}" y1="42" y2="42" stroke="#444" stroke-width="1"/>')
-    s.append(f'<rect x="{X(B["zone"][0]):.1f}" y="34" width="{max(X(B["zone"][1])-X(B["zone"][0]),3):.1f}" height="16" fill="#cfe8d5" stroke="#1a7f4b" stroke-width=".8"/>')
     ta = A['trig']
-    s.append(f'<rect x="{X(ta*0.9975):.1f}" y="34" width="{max(X(ta*1.0025)-X(ta*0.9975),3):.1f}" height="16" fill="#f6d6d2" stroke="#c0392b" stroke-width=".8"/>')
-    for p, lab, col, up in ((S['exitp'], f'離場 {S["exitp"]:.2f}', '#c0392b', True), (S['reduce'], f'減倉 {S["reduce"]:.2f}', '#e0a31e', False),
-                            (m['ma50'], f'MA50 {m["ma50"]:.2f}', '#2e86c1', False), (m['ma20'], f'MA20 {m["ma20"]:.2f}', '#8e44ad', True)):
-        s.append(f'<line x1="{X(p):.1f}" x2="{X(p):.1f}" y1="30" y2="54" stroke="{col}" stroke-width="1.6"/>')
-        s.append(f'<text x="{X(p):.1f}" y="{22 if up else 66}" font-size="8.5" fill="{col}" text-anchor="middle">{lab}</text>')
-    s.append(f'<circle cx="{X(c):.1f}" cy="42" r="5" fill="#111"/><text x="{X(c):.1f}" y="12" font-size="9.5" font-weight="700" text-anchor="middle">現價 {c:.2f}</text>')
-    s.append(f'<text x="{X((B["zone"][0]+B["zone"][1])/2):.1f}" y="80" font-size="8" fill="#1a7f4b" text-anchor="middle">回踩入場區 {B["zone"][0]:.2f}–{B["zone"][1]:.2f}</text>')
-    s.append(f'<text x="{X(ta):.1f}" y="80" font-size="8" fill="#c0392b" text-anchor="middle">順勢觸發 {ta:.2f}</text>')
+    marks = ((S['exitp'], f'離場 {S["exitp"]:.2f}', '#c0392b', True), (S['reduce'], f'減倉 {S["reduce"]:.2f}', '#e0a31e', False),
+             (m['ma50'], f'MA50 {m["ma50"]:.2f}', '#2e86c1', False), (m['ma20'], f'MA20 {m["ma20"]:.2f}', '#8e44ad', True))
+    # (x, 文字, 色, 字號, 上／下, 粗體)；現價先放，佔上面第一行
+    labels = [(X(c), f'現價 {c:.2f}', '#111', 9.5, True, True)]
+    labels += [(X(p), lab, col, 8.5, up, False) for p, lab, col, up in marks]
+    labels += [(X((B['zone'][0] + B['zone'][1]) / 2), f'回踩入場區 {B["zone"][0]:.2f}–{B["zone"][1]:.2f}', '#1a7f4b', 8, False, False),
+               (X(ta), f'順勢觸發 {ta:.2f}', '#c0392b', 8, False, False)]
+    lanes = {True: [], False: []}   # 每邊每行已佔嘅 (左, 右)
+    placed = []
+    for x, t, col, fs, up, bold in labels:
+        w = _tw(t, fs); x = min(max(x, w / 2 + 2), W - w / 2 - 2)
+        L = lanes[up]; k = 0
+        while k < len(L) and any(x - w / 2 - 5 < r and x + w / 2 + 5 > l for l, r in L[k]): k += 1
+        if k == len(L): L.append([])
+        L[k].append((x - w / 2, x + w / 2)); placed.append((x, t, col, fs, up, bold, k))
+    nt, nb = max(len(lanes[True]), 1), max(len(lanes[False]), 1)
+    Y = 30 + 11 * (nt - 1); H = Y + 24 + 11 * (nb - 1) + 6
+    s = [f'<svg viewBox="0 0 {W} {H}" width="100%" xmlns="http://www.w3.org/2000/svg">']
+    s.append(f'<line x1="20" x2="{W-20}" y1="{Y}" y2="{Y}" stroke="#444" stroke-width="1"/>')
+    s.append(f'<rect x="{X(B["zone"][0]):.1f}" y="{Y-8}" width="{max(X(B["zone"][1])-X(B["zone"][0]),3):.1f}" height="16" fill="#cfe8d5" stroke="#1a7f4b" stroke-width=".8"/>')
+    s.append(f'<rect x="{X(ta*0.9975):.1f}" y="{Y-8}" width="{max(X(ta*1.0025)-X(ta*0.9975),3):.1f}" height="16" fill="#f6d6d2" stroke="#c0392b" stroke-width=".8"/>')
+    for p, lab, col, up in marks:
+        s.append(f'<line x1="{X(p):.1f}" x2="{X(p):.1f}" y1="{Y-12}" y2="{Y+12}" stroke="{col}" stroke-width="1.6"/>')
+    s.append(f'<circle cx="{X(c):.1f}" cy="{Y}" r="5" fill="#111"/>')
+    for x, t, col, fs, up, bold, k in placed:
+        y = Y - 20 - 11 * k if up else Y + 24 + 11 * k
+        s.append(f'<text x="{x:.1f}" y="{y}" font-size="{fs}" fill="{col}" text-anchor="middle"{" font-weight=\"700\"" if bold else ""}>{t}</text>')
     s.append('</svg>')
     return ''.join(s)
 
