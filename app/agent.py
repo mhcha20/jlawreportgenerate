@@ -248,7 +248,22 @@ J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝
         if pref == 'gemini':
             import gemini
             s.engine = 'gemini'; s.log(f'用 Google Gemini（{gemini.MODEL}）')
-            return gemini.run(s, system, content)
+            try:
+                return gemini.run(s, system, content)
+            except Cancelled: raise
+            except Exception as e:
+                # 用戶 2026-11-18：Gemini 冇額度（402，11/13 三份亞洲報告一齊失敗）／限流／伺服器出錯／連唔到 → 轉 Grok 由頭做；
+                # QA 擋位試晒、AI 唔肯交 work 檔呢類唔係 API 問題，照舊失敗
+                msg = str(e)
+                api_err = isinstance(e, ConnectionError) or bool(re.match(r'(Gemini \S*\s?[45]\d\d|連唔到 Gemini|Gemini 串流)', msg))
+                if s.pdf:
+                    s.log(f'⚠ Gemini 最後一步出錯（{msg[:120]}），用已經過 QA 嘅 PDF'); return
+                if not (api_err and getattr(s, 'gemini_fallback', True) and os.environ.get('XAI_API_KEY')): raise
+                s.builds = 0
+                s.log(f'⚠ Gemini 用唔到（{msg[:200]}），改用 Grok 由頭再做')
+                import grok
+                s.engine = 'grok'
+                return grok.run(s, system, content)
         if pref == 'grok':
             import grok
             s.engine = 'grok'; s.log('用 xAI Grok（網頁指定）')

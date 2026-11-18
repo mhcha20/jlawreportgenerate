@@ -90,6 +90,7 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
 #smg summary { list-style:none; } #smg[open] summary { margin-bottom:6px; }
 .smgbtn { display:inline-block; margin-top:10px; padding:8px 14px; border:1px solid var(--pri); border-radius:8px; color:var(--pri); font-weight:600; cursor:pointer; }
 #smg[open] .smgbtn { background:var(--pri); color:#fff; }
+.schedeng { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; margin:6px 0 10px; font-size:14px; } .schedeng select { width:auto; max-width:100%; }
 </style>
 </head>
 <body>
@@ -231,6 +232,12 @@ details.card > summary { cursor:pointer; list-style:none; } details.card > summa
     <div class="card">
       <h2>報告紀錄</h2>
       <div class="mute" id="autoNote"></div>
+      <div class="schedeng" id="schedEng" hidden>   <!-- 用戶 2026-11-18：排程用邊個 AI 喺網頁揀 -->
+        <label>美股大盤排程用 <select id="sUsEng"><option value="auto">自動（Claude，唔得轉 Grok）</option><option value="gemini">Google Gemini</option><option value="grok">xAI Grok</option></select></label>
+        <label>亞洲大盤排程用 <select id="sAsiaEng"><option value="auto">自動（Claude，唔得轉 Grok）</option><option value="gemini">Google Gemini</option><option value="grok">xAI Grok</option></select></label>
+        <label class="chk"><input type="checkbox" id="sGemFb"> Gemini 冇額度／連唔到就自動轉 Grok（手動同排程都適用）</label>
+        <span class="mute" id="sEngMsg"></span>
+      </div>
       <div class="srow" id="qbar" hidden><span class="mute" id="qinfo"></span><button class="sec" id="qcancel">取消全部排緊隊</button></div>
       <div class="chips jfilter" id="jfilter"></div>
       <div class="srow" id="rbar" hidden><button class="sec" id="rall">重做顯示中全部失敗／已取消</button></div>
@@ -520,6 +527,25 @@ const MKTN = {hk: '香港', jp: '日本', kr: '韓國'};
 const kindName = j => j.kind === 'stock' ? esc(j.ticker) + (j.parts === 'card' ? ' 行動卡（只出卡）' : ' 個股報告') : j.kind === 'amarket' ? (MKTN[j.ticker] || esc(j.ticker)) + '大盤報告' : '大盤報告';
 const ST = {queued: ['排隊中', 'warn'], running: ['進行中', 'warn'], done: ['完成', 'ok'], failed: ['失敗', 'bad'], cancelled: ['已取消', '']};
 let canUpload = false, openLog = new Set();
+// 排程用邊個 AI（/api/settings，存喺網站，兩個帳戶共用）
+async function loadSettings() {
+  let st; try { st = await api('/api/settings'); } catch (e) { return; }
+  const eng = (auth && auth.engines) || {};
+  for (const [id, k] of [['sUsEng', 'us_engine'], ['sAsiaEng', 'asia_engine']]) {
+    const sel = $(id);
+    [...sel.options].forEach(o => { const ok = o.value === 'auto' ? (eng.claude || eng.grok) : eng[o.value]; o.disabled = ok === false; });
+    sel.value = st[k];
+    sel.onchange = () => saveSettings({[k]: sel.value}, sel.selectedOptions[0].textContent);
+  }
+  $('sGemFb').checked = !!st.gemini_fallback;
+  $('sGemFb').onchange = () => saveSettings({gemini_fallback: $('sGemFb').checked}, $('sGemFb').checked ? 'Gemini 失敗轉 Grok：開' : 'Gemini 失敗轉 Grok：關');
+  $('schedEng').hidden = false;
+}
+async function saveSettings(body, what) {
+  $('sEngMsg').textContent = '儲存緊…';
+  try { await api('/api/settings', {method: 'POST', body: JSON.stringify(body)}); $('sEngMsg').innerHTML = `<span class="ok">已儲存：${esc(what)}（下次排程生效）</span>`; }
+  catch (e) { $('sEngMsg').innerHTML = `<span class="bad">存唔到：${esc(e.message)}</span>`; loadSettings(); }
+}
 async function loadJobs() {
   let d; try { d = await api('/api/jobs'); } catch (e) { return; }
   canUpload = d.can_upload;
@@ -834,7 +860,7 @@ $('sgo').onclick = async () => {
 function start(user) {
   $('login').hidden = true; $('app').hidden = false;
   if (user) $('who').innerHTML = (user === '密碼' ? '已用密碼登入' : '已登入：' + esc(user)) + ' · <a href="/auth/logout" id="logout">登出</a>';
-  loadDates(); loadJobs(); loadWatch(); loadJlaw();
+  loadDates(); loadJobs(); loadWatch(); loadJlaw(); loadSettings();
 }
 (async () => {
   const err = new URLSearchParams(location.search).get('login_error'); if (err) history.replaceState(null, '', '/');

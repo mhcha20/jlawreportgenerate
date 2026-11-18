@@ -22,6 +22,29 @@ WATCH = os.path.join(DATA, 'watchlist.json')
 WATCH_DEFAULT = ['CAT', 'FPS', 'AAPL', 'ESTC', 'BE', 'XLV', 'PLTR', 'NVDA', 'MCD', 'SPCX', 'WM', 'COPX']   # 用戶 2026-11-06 每日睇嘅股票
 
 
+SETTINGS = os.path.join(DATA, 'settings.json')
+
+
+def settings():
+    """網頁可改嘅設定（用戶 2026-11-18：排程用邊個 AI 要喺網頁揀）。冇設定就用舊默認：美股 auto、亞洲有 Gemini key 用 Gemini。"""
+    d = {'us_engine': 'auto', 'asia_engine': os.environ.get('AUTO_ASIA_ENGINE') or ('gemini' if os.environ.get('GEMINI_API_KEY') else 'auto'),
+         'gemini_fallback': True}
+    try: d.update(json.load(open(SETTINGS, encoding='utf-8')))
+    except Exception: pass
+    return d
+
+
+def save_settings(body):
+    d = settings()
+    for k in ('us_engine', 'asia_engine'):
+        if k in body:
+            if body[k] not in ENGINES: raise ValueError(f'{k} 唔啱：{body[k]}')
+            d[k] = body[k]
+    if 'gemini_fallback' in body: d['gemini_fallback'] = bool(body['gemini_fallback'])
+    with LOCK: json.dump(d, open(SETTINGS, 'w', encoding='utf-8'), ensure_ascii=False)
+    return d
+
+
 def watchlists():
     """自訂股票清單（用戶 2026-11-07 要求：可以改名、加多幾個）→ [{'name', 'tickers'}]；舊格式 {'tickers': [...]} 當「每日清單」"""
     try: d = json.load(open(WATCH, encoding='utf-8'))
@@ -110,6 +133,7 @@ def _run(j, agent, stock):
         else: job = agent.Job(jid, j['date'], folder, log)
         job.cancelled = lambda: jid in CANCEL
         job.engine_pref = j.get('engine_pref', 'auto')
+        job.gemini_fallback = settings()['gemini_fallback']   # Gemini 冇額度／連唔到就轉 Grok（網頁設定）
         def keep():
             j['pdfs'] = [os.path.basename(x) for x in job.pdfs]; j['pdf'] = j['pdfs'][0] if j['pdfs'] else None; j['pages'] = job.pages
             if getattr(job, 'info', None): j['result'] = {k: job.info.get(k) for k in ('rating', 'score', 'action', 'tier', 'signals')}
@@ -140,7 +164,6 @@ def scheduler():
     if not (us_on or asia_on): return
     a, b = os.environ.get('AUTO_START', '06:30'), os.environ.get('AUTO_END', '11:30')
     aa, ab = os.environ.get('AUTO_ASIA_START', '17:30'), os.environ.get('AUTO_ASIA_END', '21:30')
-    aeng = os.environ.get('AUTO_ASIA_ENGINE') or ('gemini' if os.environ.get('GEMINI_API_KEY') else 'auto')
     up = os.environ.get('AUTO_UPLOAD') == '1'
     while True:
         try:
@@ -151,7 +174,7 @@ def scheduler():
                 if not tried and not jlaw.has_report(d):
                     sh = jlaw.market_shots(d)
                     if sh['folder'] and not sh['missing']:
-                        new_job(d, by='排程', upload=up)
+                        new_job(d, by='排程', upload=up, engine=settings()['us_engine'])
             if asia_on and aa <= t <= ab and now_hk.weekday() < 5:
                 import asia
                 d = now_hk.date().isoformat(); root = None
@@ -161,7 +184,7 @@ def scheduler():
                     if root is None: root = jlaw.ls(jlaw.MROOT)
                     sh = jlaw.asia_shots(k, d, root)
                     if sh['folder'] and not sh['missing']:
-                        new_job(d, by='排程', upload=up, kind='amarket', ticker=k, engine=aeng)
+                        new_job(d, by='排程', upload=up, kind='amarket', ticker=k, engine=settings()['asia_engine'])
         except Exception as e: print('scheduler', e, flush=True)
         time.sleep(900)
 
@@ -312,6 +335,7 @@ class H(BaseHTTPRequestHandler):
                 sh = jlaw.market_shots(d)
                 return s._send(200, {'date': d, 'folder': sh['folder'], 'name': sh['name'], 'have': sorted(sh['files']), 'missing': sh['missing'], 'checked_at': now_iso()})
             except Exception as e: return s._send(502, {'error': str(e)})
+        if p == '/api/settings': return s._send(200, settings())
         if p == '/api/watchlist': wl = watchlists(); return s._send(200, {'lists': wl, 'tickers': wl[0]['tickers']})
         if p == '/api/stock_lookup':   # 加股票前核對：Yahoo 正式名／交易所／ETF＋現有清單（用戶 2026-11-12）
             import stocklist
@@ -389,6 +413,9 @@ class H(BaseHTTPRequestHandler):
         if m:
             import capture
             try: return s._send(200, {'task': capture.cancel(DATA, m.group(1))})
+            except ValueError as e: return s._send(400, {'error': str(e)})
+        if p == '/api/settings':   # 排程用邊個 AI、Gemini 失敗轉 Grok（用戶 2026-11-18）
+            try: return s._send(200, save_settings(body))
             except ValueError as e: return s._send(400, {'error': str(e)})
         if p == '/api/watchlist':   # 自訂股票清單（存喺 volume，所有裝置共用）：{lists:[{name,tickers}]} 成份覆蓋；舊用法 {tickers} 只改第一個
             try:
