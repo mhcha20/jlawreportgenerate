@@ -25,7 +25,7 @@ build 會擋：work 檔冇 TODO、今日動作 ≤40 字、行動卡 1 頁、qa(
 - 評等要同分數對應（每 20 分一級）：★ 避免交易 <30｜★★ 不建議 30–49｜★★★ 觀察 50–69｜★★★★ 值得買入 70–89｜★★★★★ 強烈買入 ≥90（分數＝九構面星數÷45×100），rating 寫「★★★ 觀察」咁、stars 同星數一致。
 - 第 6 格要有固定句「回踩區入場（主目標 x.xxR）」。唔好提「群組」「執行規則」。
 - 評分、價位、形態判斷要參考 J Law 方法筆記。
-- **承襲價位規則**：未失效照用上一份數字；已失效（以收市價計）就重訂有理據嘅新位，foot 或 biggest 寫「舊 X（日期失效）→ 新 Y（理據）」。跌穿當日今日動作照舊價計（離場線跌穿＝今日離場、減倉線跌穿＝減倉），新價下一交易日起生效。上一張卡之後已經跌穿過（中間冇卡處理）都一樣要寫今日離場／減倉，唔准下移條線寫續抱（build 會擋）。
+- **承襲價位規則**：未失效照用上一份數字；已失效（以收市價計）就重訂有理據嘅新位，foot 或 biggest 寫「舊 X（日期失效）→ 新 Y（理據）」。跌穿當日今日動作照舊價計（離場線跌穿＝今日離場、減倉線跌穿＝減倉），新價下一交易日起生效。上一張卡之後已經跌穿過（中間冇卡處理）都一樣要寫今日離場／減倉，唔准下移條線寫續抱（build 會擋）。上一張卡已叫已持倉離場：今日已持倉寫「已按 MM/DD 卡清倉，等重新入場訊號」（build 會擋）。
 - **價位次序**（build 會擋）：回踩區下限 ≥ 減倉線 ≥ 離場線 ≥ 回踩止損；未失效承襲價本身唔夾就照用，喺 S['level_note'] 寫明（≥20 字）。
 - S['ai_line'] 寫「AI：<模型識別碼>，直接閱讀截圖圖像。」
 
@@ -68,7 +68,7 @@ build 會擋：work 檔冇 TODO、今日動作 ≤40 字、朗讀稿字數、行
 - 第 6 格要有固定句「回踩區入場（主目標 x.xxR）」。唔好提「群組」「執行規則」。
 - 評分、價位、形態判斷要參考 J Law 方法筆記（VCP、拉回買入、S&R、趨勢線、均線、見頂見底訊號）。
 - **承襲價位規則**（用戶 2026-11-06 決定，三個引擎都係）：減倉線、離場線、止損、回踩入場區、順勢觸發——**未失效**就照用上一份嘅數字，唔准改；**已失效**（以收市價計：跌穿止損／減倉／離場線、回踩區已喺現價上面、順勢觸發已被升穿等，條線已經冇用）就一定要重訂一條**有理據**嘅新位（前浪低／高、S&R 區間、均線、趨勢線、ATR、底部形態，寫出計法），唔好死守失效舊價，亦唔好冇理據咁「機械下移」。正文原位寫明「舊 X（YYYY-MM-DD 收市已跌穿，失效）→ 新 Y（理據：…）」，行動卡價位用新值，附錄承襲對照表逐項列舊值、今日實際、新值同理由。冇上一份（首份）先全部自己訂。
-- **跌穿當日嘅今日動作照舊價計**：承襲離場線今日收市跌穿＝已持倉「今日離場」；承襲減倉線跌穿＝「減倉」；就算同日重訂咗新價，今日動作都唔可以因為新價而改做續抱。重訂嘅新價由下一個交易日起先用（行動卡寫明「新價 x 由下一交易日起生效」）。**上一張卡之後已經跌穿過**（中間冇卡叫持倉嘅人處理，例如 CAT 11/04 跌穿 600、11/06 先出卡）都一樣：已持倉今日動作要係「今日離場」／「減倉」，唔准將條線下移就寫續抱（build 會擋）。
+- **跌穿當日嘅今日動作照舊價計**：承襲離場線今日收市跌穿＝已持倉「今日離場」；承襲減倉線跌穿＝「減倉」；就算同日重訂咗新價，今日動作都唔可以因為新價而改做續抱。重訂嘅新價由下一個交易日起先用（行動卡寫明「新價 x 由下一交易日起生效」）。**上一張卡之後已經跌穿過**（中間冇卡叫持倉嘅人處理，例如 CAT 11/04 跌穿 600、11/06 先出卡）都一樣：已持倉今日動作要係「今日離場」／「減倉」，唔准將條線下移就寫續抱（build 會擋）。**上一張卡已經叫已持倉離場**（而且嗰張未持倉一欄冇叫建倉）：今日已持倉一欄寫「已按 MM/DD 卡清倉，等重新入場訊號」，唔好寫續抱／減倉（build 會擋）。
 - **價位次序**（build 會擋）：回踩區下限 ≥ 減倉線 ≥ 離場線 ≥ 回踩止損（減倉線唔可以喺回踩區入面）。重訂時照呢個次序；如果係未失效承襲價本身唔夾，照用承襲值，喺 S['level_note'] 寫明（≥20 字）。
 - S['ai_line'] 寫「AI：<模型識別碼>，直接閱讀截圖圖像。」
 
@@ -135,6 +135,30 @@ def _bar_dates(bars, date):
         if mo > prev_m: y -= 1
         prev_m = mo; out.append((f'{y}-{b[0]}', b))
     return list(reversed(out))
+
+
+def prior_exit(t, date):
+    """上一張 V2.0 卡已經叫已持倉離場（用戶 2026-11-18：000660 11/06 卡「今日離場」，11/09 卡寫「轉為按新位續抱」會令人以為仲有貨）。
+    之後嘅卡已持倉要寫「已按 MM/DD 卡清倉，等重新入場訊號」（報告中心 signals.js 將「清倉」歸類做離場，回測唔會當新賣出）。
+    上一張卡未持倉一欄係條件式建倉／三閘全過（可能已經重新入場）就唔理。回傳 dict(date, md) 或 None。"""
+    try: sig = jlaw.get_json('/api/signals')
+    except Exception: return None
+    hist = [e for e in (sig.get('history') or {}).get(t, []) if e.get('gen') == 'v2' and e.get('date', '') < date]
+    if not hist: return None
+    pr = hist[-1]
+    if (pr.get('held') or {}).get('key') != 'exit' or (pr.get('flat') or {}).get('key') in ('cond', 'go'): return None
+    # 連續幾張都係「清倉」：寫最早叫離場嗰張嘅日期
+    first = pr
+    for e in reversed(hist[:-1]):
+        if (e.get('held') or {}).get('key') == 'exit' and (e.get('flat') or {}).get('key') not in ('cond', 'go'): first = e
+        else: break
+    return dict(date=first['date'], md=first['date'][5:].replace('-', '/'))
+
+
+def exit_text(x):
+    return (f'上一張 V2.0 卡（{x["date"]}）已經叫已持倉離場，照規則持倉嘅人已經冇貨。今日「已持倉」一欄一定要寫'
+            f'「已按 {x["md"]} 卡清倉，等重新入場訊號」（可以加少少字，但要有「清倉」兩個字，唔好寫續抱、減倉、持有）；'
+            '新訂嘅價位照寫，俾重新入場參考。')
 
 
 def level_breach(t, date):
@@ -206,6 +230,8 @@ class StockJob(agent.Job):
         s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200]); s.check_cancel()
         lbtxt = s.lb_verify(t, date, lbs, lbmsg, lb_filled)
         s.breach = level_breach(t, date)
+        s.after_exit = prior_exit(t, date)
+        if s.after_exit: s.log('上一張卡已叫離場：' + exit_text(s.after_exit)[:80])
         if s.breach: s.log('⚠ ' + breach_text(s.breach)[:120])
         summary = metrics_summary(t, date)
         try: prior = jlaw.prior_stock(t, date)
@@ -249,7 +275,7 @@ class StockJob(agent.Job):
 Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三節同 notes）：
 {lbtxt}
 
-{('⚠ 價位已被跌穿（build 會擋）：' + breach_text(s.breach) + chr(10) + chr(10)) if s.breach else ''}上一份報告（用嚟寫 prior／biggest／vsprior；先核對佢嘅日期同收市價）：{ptxt or '（冇，首份）'}
+{('⚠ 價位已被跌穿（build 會擋）：' + breach_text(s.breach) + chr(10) + chr(10)) if s.breach else ''}{('⚠ 上一張卡已叫離場（build 會擋）：' + exit_text(s.after_exit) + chr(10) + chr(10)) if s.after_exit else ''}上一份報告（用嚟寫 prior／biggest／vsprior；先核對佢嘅日期同收市價）：{ptxt or '（冇，首份）'}
 
 當日大盤報告（市場配合構面、R4 第一項、mkt_state／mkt_ref）：{mname or '（冇' + ('，亞洲股只用圖面指數' if sh['kind'] == 'ASIA' else '') + '）'}{'（唔係當日，承襲最近一份，要喺 foot 註明）' if mname and not same else ''}
 {mtxt[:30000]}
@@ -285,9 +311,12 @@ Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三�
                 {'STOCK_STRICT': os.environ.get('STOCK_STRICT', '1'), 'JL_DATE': s.date})
 
     def post_build_check(s, info):
+        held = str(((info.get('signals') or {}).get('held')) or '')
+        x = getattr(s, 'after_exit', None)
+        if x and '離場' not in held:
+            return f'已持倉今日動作解析成「{held or "?"}」，唔啱：' + exit_text(x)
         b = getattr(s, 'breach', None)
         if not b: return None
-        held = str(((info.get('signals') or {}).get('held')) or '')
         ok = '離場' in held if b['kind'] == 'exit' else ('減倉' in held or '離場' in held)
         return None if ok else f'已持倉今日動作解析成「{held or "?"}」，唔啱：' + breach_text(b)
 
