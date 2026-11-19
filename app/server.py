@@ -344,8 +344,8 @@ class H(BaseHTTPRequestHandler):
             try: return s._send(200, {'rows': stocklist.lookup(q.get('q', [''])[0], have), 'total': len(have)})
             except Exception as e: return s._send(502, {'error': str(e)})
         if p == '/api/capture':   # 網頁遙控 Mac 截圖：狀態＋最近動作＋預設日期
-            import capture
-            v = capture.view(DATA)
+            import capture, futu_verify as futu
+            v = capture.view(DATA); v['futu'] = futu.status()
             try: v['defaults'] = {'us': jlaw.last_us_trading_day(), 'asia': jlaw.stock_dates([])[1]}
             except Exception: v['defaults'] = {}
             return s._send(200, v)
@@ -364,6 +364,9 @@ class H(BaseHTTPRequestHandler):
                 import suggest
                 return s._send(200, suggest.suggest(d))
             except Exception as e: return s._send(502, {'error': str(e)})
+        if p == '/api/futu':   # Mac 富途 OpenD 橋接狀態
+            import futu_verify as futu
+            return s._send(200, futu.status())
         if p == '/api/longbridge':   # Longbridge 連線狀態（攞 NVDA.US 報價）
             if not longbridge.enabled(): return s._send(200, {'ok': False, 'msg': '未設定 Longbridge 金鑰'})
             try: return s._send(200, {'ok': True, 'msg': longbridge.check()})
@@ -377,6 +380,14 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(s):
         p = urlparse(s.path).path
+        if p in ('/api/futu/agent/poll', '/api/futu/agent/result'):   # Mac 富途橋接（screencapture bin/futu_bridge.py）：同一個 CAPTURE_TOKEN
+            import capture, futu_verify as futu
+            if not capture.token_ok(s.headers.get('x-capture-token', '')): return s._send(401, {'error': 'bad token'})
+            n = int(s.headers.get('Content-Length') or 0)
+            if n > 4 << 20: return s._send(413, {'error': 'too large'})
+            try: body = json.loads(s.rfile.read(n) or b'{}') if n else {}
+            except Exception: return s._send(400, {'error': 'bad json'})
+            return s._send(200, futu.agent_poll(body) if p.endswith('/poll') else futu.agent_result(body))
         if p.startswith('/api/capture/agent/'):   # Mac 截圖代理（screencapture bin/remote_agent.py）：用 CAPTURE_TOKEN，唔使 Google 登入
             import capture
             if not capture.token_ok(s.headers.get('x-capture-token', '')): return s._send(401, {'error': 'bad token'})

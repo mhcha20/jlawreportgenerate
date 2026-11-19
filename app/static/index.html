@@ -407,6 +407,8 @@ async function loadCapture(setDate) {
   $('cMac').innerHTML = !v.token_set ? '<span class="warn">網站未設定 CAPTURE_TOKEN：Mac 要先行 bash mac/remote-setup.sh，再將 token 加入 Railway</span>'
     : m.online ? `<span class="ok cdot">🟢 Mac 在線</span> <span class="mute">${esc(m.host || '')} · ${m.age} 秒前聯絡 · 程式 ${esc(m.version || '?')}</span>${macState(m, v.tasks)}`
     : `<span class="bad cdot">🔴 Mac 離線</span> <span class="mute">${m.at ? '最後聯絡 ' + esc(m.at.replace('T', ' ').slice(0, 16)) : '從未聯絡過'}（排咗嘅動作會等 Mac 返嚟先做）</span>`;
+  const f = v.futu;   // 富途 OpenD 核實（用戶 2026-11-19）
+  if (f && v.token_set) $('cMac').innerHTML += `<div class="mute" style="margin-top:4px">${f.ok ? '🟢' : f.online ? '🟠' : '⚪'} 富途核實：${f.ok ? '已連線' : f.online ? '未就緒' : '未連接'}${f.msg ? '（' + esc(f.msg) + '）' : ''}</div>`;
   const ts = v.tasks.slice(0, 15);
   $('cList').innerHTML = ts.length ? ts.map(t => {
     const [st, c] = CST[t.status] || [t.status, ''];

@@ -3,7 +3,7 @@ Drive 截圖 → 行情（gen/prep.py）→ 上一份報告＋當日大盤報告
 流程規則照 docs/WORKER.md（排程 Claude session 用嘅版本）。"""
 import datetime as dt, glob, json, os, subprocess, sys
 from zoneinfo import ZoneInfo
-import agent, jlaw, longbridge as lb
+import agent, futu_verify as futu, jlaw, longbridge as lb
 from agent import GEN, _read, img_block
 
 FORMAT_REF_STOCK = os.environ.get('FORMAT_REF_STOCK', '2026-10-30_ESTC_')   # 個股格式範本（用戶 2026-11-05 指定）：Drive 檔名前綴，攞行動卡／股票分析終極報告／核對附錄三份
@@ -229,6 +229,7 @@ class StockJob(agent.Job):
         if p.returncode != 0: raise RuntimeError('行情準備失敗：' + (p.stderr or p.stdout)[-1200:])
         s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200]); s.check_cancel()
         lbtxt = s.lb_verify(t, date, lbs, lbmsg, lb_filled)
+        futxt = s.futu_verify(t, date)
         s.breach = level_breach(t, date)
         s.after_exit = prior_exit(t, date)
         if s.after_exit: s.log('上一張卡已叫離場：' + exit_text(s.after_exit)[:80])
@@ -275,6 +276,9 @@ class StockJob(agent.Job):
 Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三節同 notes）：
 {lbtxt}
 
+富途核實（網站經 Mac 富途 OpenD 代做，第二個獨立來源；一致就喺附錄第三節資料來源寫「收市同富途一致」，不一致並列數字，冇核實就唔好提富途）：
+{futxt}
+
 {('⚠ 價位已被跌穿（build 會擋）：' + breach_text(s.breach) + chr(10) + chr(10)) if s.breach else ''}{('⚠ 上一張卡已叫離場（build 會擋）：' + exit_text(s.after_exit) + chr(10) + chr(10)) if s.after_exit else ''}上一份報告（用嚟寫 prior／biggest／vsprior；先核對佢嘅日期同收市價）：{ptxt or '（冇，首份）'}
 
 當日大盤報告（市場配合構面、R4 第一項、mkt_state／mkt_ref）：{mname or '（冇' + ('，亞洲股只用圖面指數' if sh['kind'] == 'ASIA' else '') + '）'}{'（唔係當日，承襲最近一份，要喺 foot 註明）' if mname and not same else ''}
@@ -302,6 +306,14 @@ Longbridge 核實（網站直連 Longbridge OpenAPI 代做，寫入附錄第三�
             s.log('Longbridge 業績日：' + (er[0] if er else '45 日內冇'))
         except lb.LBError as e: lines.append(f'下次業績日：Longbridge 查詢失敗（{e}），用 web_search 核實'); s.log(f'⚠ Longbridge 業績日查詢失敗：{e}')
         return '\n'.join(lines)
+
+    def futu_verify(s, t, date):
+        """用戶 2026-11-19：報告日 OHLCV 同富途比（第二個來源；失敗唔影響報告）"""
+        try:
+            b = json.load(open(os.path.join(GEN, 'data', f'{t}_{date}.json')))['bars'][-1]   # [MM-DD,o,h,l,c,v千股]
+            if b[0] != date[5:]: return f'今次冇富途核實（行情檔最後一根係 {b[0]}）。'
+        except Exception as e: return f'今次冇富途核實（讀唔到行情檔：{e}）。'
+        return futu.verify([(t, dict(o=b[1], h=b[2], l=b[3], c=b[4], v=b[5] * 1000))], date, s.log)
 
     def inspect_prelude(s):
         return (GEN, f"import sys, os; sys.path.insert(0, {GEN!r}); os.chdir({GEN!r}); os.environ['JL_DATE'] = {s.date!r}\nfrom lib import *\nfrom gen import *\nm = metrics({s.ticker!r})")

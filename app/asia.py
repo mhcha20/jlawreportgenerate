@@ -102,6 +102,7 @@ class AsiaJob(agent.Job):
         s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200])
         summary = data_summary(s.mkt, date)
         lbtxt = s.lb_verify_asia(date)
+        import futu_verify as futu; futxt = futu.verify_dir(os.path.join(ADIR, 'data', s.mkt), date, s.log)
         s.check_cancel()
         try: pname, ptxt = jlaw.prev_asia_report(pr['title'], date)
         except Exception as e: pname, ptxt = None, ''; s.log(f'⚠ 讀唔到上一份報告：{e}')
@@ -127,6 +128,9 @@ class AsiaJob(agent.Job):
 
 Longbridge 核實（網站代做；結果寫入第二節資料來源）：
 {lbtxt}
+
+富途核實（網站經 Mac 富途 OpenD 代做；結果寫入第二節資料來源，冇核實就唔好提富途）：
+{futxt}
 
 J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝發布日期，只用 ≤ 分析交易日嘅；J Law 多數講美股）：{jtxt or '（冇）'}
 有材料而且有講到{pr['name']}市場、亞洲、中國，或者整體風險胃納（Risk-On／Neutral／Risk-Off）就寫 jlaw_html（材料清單、風險胃納點樣套用到{pr['name']}、逐項表 ≥3 項對今日{pr['name']}數據核實）；完全冇關就唔好寫，喺 inherit_note 一句講明「J Law 材料主要講美股，冇直接涉及{pr['name']}」。

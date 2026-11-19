@@ -177,6 +177,7 @@ class Job:
                 p = prep('--extra', json.dumps(lbfill))
         if p.returncode != 0: raise RuntimeError('行情準備失敗：' + (p.stderr or p.stdout)[-1500:])
         lbtxt = s.lb_verify(date, lbfill, lbmsg)
+        import futu_verify as futu; futxt = futu.verify_dir(os.path.join(GEN, 'market', 'data'), date, s.log)
         summary = data_summary(date)
         s.log('行情齊：' + p.stdout.strip().splitlines()[-1][:200])
         # 3. 上一份報告
@@ -213,6 +214,9 @@ class Job:
 
 Longbridge 核實（網站直連 Longbridge OpenAPI 代做；結果寫入第二節資料來源，例：「SPY／QQQ／IWM 收市同 Longbridge 一致」，不一致就並列兩邊數字）：
 {lbtxt}
+
+富途核實（網站經 Mac 富途 OpenD 代做，第二個獨立來源；結果寫入第二節資料來源，冇核實就唔好提富途）：
+{futxt}
 
 J Law 觀點材料（私人，只可用嚟寫 jlaw_html 一節；檔名日期＝發布日期，只用 ≤ 分析交易日嘅）：{jtxt or '（冇）'}
 
